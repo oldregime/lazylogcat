@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/tui/devicesui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 )
@@ -72,12 +73,18 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MainModel) View() string {
+	var style = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63"))
+
+	var content string
+
 	switch m.state {
 	case devicesView:
-		return m.devicesView.View()
+		content = m.devicesView.View()
 	case logcatView:
-		return m.logcatView.View()
+		content = m.logcatView.View()
 	}
 
-	return ""
+	return style.Render(content)
 }

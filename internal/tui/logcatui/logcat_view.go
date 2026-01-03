@@ -100,7 +100,7 @@ func (m LogcatModel) View() string {
 }
 
 func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
-	cmd := exec.Command("adb", "-s", device, "logcat")
+	cmd := exec.Command("adb", "-s", device, "logcat", "-v", "color")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}
