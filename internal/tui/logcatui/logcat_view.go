@@ -11,6 +11,7 @@ import (
 )
 
 type LogcatModel struct {
+	cmd    *exec.Cmd
 	log    []message
 	Device model.Device
 	err    error
@@ -108,4 +109,10 @@ func WaitForNextLine() tea.Msg {
 	}
 
 	return nil
+}
+
+func (m LogcatModel) Close() {
+	if m.cmd != nil && m.cmd.Process != nil {
+		m.cmd.Process.Kill()
+	}
 }

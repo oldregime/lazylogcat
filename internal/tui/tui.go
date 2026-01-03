@@ -17,7 +17,6 @@ type MainModel struct {
 	state       sessionState
 	devicesView devicesui.DeviceSelectionModel
 	logcatView  logcatui.LogcatModel
-	quitting    bool
 }
 
 func InitMainModel() MainModel {
@@ -38,7 +37,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			m.quitting = true
+			m.logcatView.Close()
 			return m, tea.Quit
 		}
 	case devicesui.DeviceSelectedMsg:
@@ -51,6 +50,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case logcatui.BackMsg:
+		m.logcatView.Close()
 		m.state = devicesView
 		return m, devicesui.GetDevices
 	}
