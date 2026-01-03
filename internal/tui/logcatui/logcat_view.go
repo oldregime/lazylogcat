@@ -40,6 +40,11 @@ type logcatErrorMsg struct {
 	Err error
 }
 
+type logcatConnectedMsg struct {
+	cmd     *exec.Cmd
+	scanner *bufio.Scanner
+}
+
 type BackMsg struct{}
 
 func New(device model.Device) LogcatModel {
@@ -57,6 +62,11 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				return BackMsg{}
 			}
 		}
+	case logcatConnectedMsg:
+		m.cmd = msg.cmd
+		m.scanner = msg.scanner
+		return m, m.WaitForNextLine
+
 	case logcatLineMsg:
 		if len(m.log) >= maxLogLines {
 			m.log = m.log[1:]
@@ -100,9 +110,12 @@ func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to start adb: %w", err)}
 	}
 
-	m.scanner = bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(stdout)
 
-	return m.WaitForNextLine()
+	return logcatConnectedMsg{
+		cmd:     cmd,
+		scanner: scanner,
+	}
 }
 
 func (m LogcatModel) WaitForNextLine() tea.Msg {
