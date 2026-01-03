@@ -96,6 +96,9 @@ func GetDevices() tea.Msg {
 	for _, l := range lines[1:] {
 		if strings.Contains(l, "device") {
 			parts := strings.Split(l, " ")
+			if len(parts) == 0 {
+				continue
+			}
 			id := parts[0]
 			name := "Undefined"
 			for _, p := range parts {
