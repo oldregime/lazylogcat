@@ -13,7 +13,7 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
-const maxLogLines = 10000
+const maxLogLines = 1000
 
 var (
 	titleStyle = func() lipgloss.Style {
@@ -36,6 +36,7 @@ type LogcatModel struct {
 	scanner      *bufio.Scanner
 	Device       model.Device
 	filter       filter
+	format       format
 	log          []message
 	pkgInputMode bool
 	packageInput textinput.Model
@@ -56,7 +57,11 @@ const (
 
 type filter struct {
 	packageName string
-	color       bool
+}
+
+type format struct {
+	color bool
+	tag   bool
 }
 
 type logcatLineMsg struct {
@@ -114,8 +119,6 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				if packageName != m.filter.packageName {
 					m.filter.packageName = packageName
 					m.Close()
-					m.scanner = nil
-					m.log = nil
 					return m, m.ConnectToLogcat
 				}
 				m.packageInput.SetValue(m.filter.packageName)
@@ -153,10 +156,13 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			return m, nil
 
 		case "alt+c":
-			m.filter.color = !m.filter.color
+			m.format.color = !m.format.color
 			m.Close()
-			m.scanner = nil
-			m.log = nil
+			return m, m.ConnectToLogcat
+
+		case "alt+t":
+			m.format.tag = !m.format.tag
+			m.Close()
 			return m, m.ConnectToLogcat
 		}
 
@@ -218,17 +224,25 @@ func (m LogcatModel) View() string {
 
 func (m LogcatModel) headerView() string {
 	var filters []string
-	if m.filter == (filter{}) {
-		filters = append(filters, "None")
-	} else {
+	if m.filter != (filter{}) {
+		filters = append(filters, " | Filters:")
 		if m.filter.packageName != "" {
 			filters = append(filters, fmt.Sprintf("[pkg: %s]", m.filter.packageName))
 		}
-		if m.filter.color {
-			filters = append(filters, "[color]")
+	}
+
+	var formats []string
+	if m.format != (format{}) {
+		formats = append(formats, " | Format:")
+		if m.format.color {
+			formats = append(formats, "[color]")
+		}
+		if m.format.tag {
+			formats = append(formats, "[tag]")
 		}
 	}
-	title := titleStyle.Render(fmt.Sprintf("Device: %s | Filters: %s", m.Device.Name, strings.Join(filters, " ")))
+
+	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.Device.Name, strings.Join(filters, " "), strings.Join(formats, " ")))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
@@ -246,7 +260,7 @@ func (m LogcatModel) footerView() string {
 }
 
 func (m LogcatModel) ConnectToLogcat() tea.Msg {
-	filterArgs := []string{"-s", m.Device.Id, "logcat"}
+	args := []string{"-s", m.Device.Id, "logcat"}
 
 	if m.filter.packageName != "" {
 		pidCmd := exec.Command("adb", "-s", m.Device.Id, "shell", "pidof", m.filter.packageName)
@@ -256,15 +270,23 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 		}
 		pidStr := strings.Trim(string(pid), "\n\r ")
 		if len(pidStr) > 0 {
-			filterArgs = append(filterArgs, fmt.Sprintf("--pid=%s", pidStr))
+			args = append(args, fmt.Sprintf("--pid=%s", pidStr))
 		}
 	}
 
-	if m.filter.color {
-		filterArgs = append(filterArgs, "-v", "color")
+	if m.format != (format{}) {
+		args = append(args, "-v")
+		var formatArgs []string
+		if m.format.color {
+			formatArgs = append(formatArgs, "color")
+		}
+		if m.format.tag {
+			formatArgs = append(formatArgs, "tag")
+		}
+		args = append(args, strings.Join(formatArgs, ","))
 	}
 
-	cmd := exec.Command("adb", filterArgs...)
+	cmd := exec.Command("adb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}
@@ -304,4 +326,6 @@ func (m *LogcatModel) Close() {
 		m.cmd.Wait()
 		m.cmd = nil
 	}
+	m.scanner = nil
+	m.log = nil
 }
