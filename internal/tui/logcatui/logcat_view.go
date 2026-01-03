@@ -6,20 +6,39 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
 const maxLogLines = 10000
+
+var (
+	titleStyle = func() lipgloss.Style {
+		b := lipgloss.RoundedBorder()
+		b.Right = "├"
+		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
+	}()
+
+	infoStyle = func() lipgloss.Style {
+		b := lipgloss.RoundedBorder()
+		b.Left = "┤"
+		return titleStyle.BorderStyle(b)
+	}()
+)
 
 type LogcatModel struct {
 	viewportSize model.Size
 	viewport     viewport.Model
 	cmd          *exec.Cmd
 	scanner      *bufio.Scanner
-	log          []message
 	Device       model.Device
+	filter       filter
+	log          []message
+	pkgInputMode bool
+	packageInput textinput.Model
 	err          error
 }
 
@@ -34,6 +53,11 @@ const (
 	logcatMessage messageSource = "logcat"
 	systemMessage messageSource = "system"
 )
+
+type filter struct {
+	packageName string
+	color       bool
+}
 
 type logcatLineMsg struct {
 	Line string
@@ -51,12 +75,25 @@ type logcatConnectedMsg struct {
 type BackMsg struct{}
 
 func New(viewportSize model.Size, device model.Device) LogcatModel {
-	vp := viewport.New(viewportSize.Width, viewportSize.Height)
-	return LogcatModel{
+	m := LogcatModel{
 		viewportSize: viewportSize,
-		viewport:     vp,
 		Device:       device,
 	}
+
+	// Initialize text input for package filtering
+	ti := textinput.New()
+	ti.Placeholder = "Enter package name..."
+	ti.Prompt = "Package: "
+	ti.CharLimit = 100
+	ti.Width = viewportSize.Width - 20
+	m.packageInput = ti
+
+	headerHeight := lipgloss.Height(m.headerView())
+	footerHeight := lipgloss.Height(m.footerView())
+	vp := viewport.New(viewportSize.Width, viewportSize.Height-footerHeight-headerHeight)
+	m.viewport = vp
+
+	return m
 }
 
 func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
@@ -67,14 +104,60 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle package input mode
+		if m.pkgInputMode {
+			switch msg.String() {
+			case "enter":
+				m.pkgInputMode = false
+				m.packageInput.Blur()
+				packageName := strings.TrimSpace(m.packageInput.Value())
+				if packageName != m.filter.packageName {
+					m.filter.packageName = packageName
+					m.Close()
+					m.scanner = nil
+					m.log = nil
+					return m, m.ConnectToLogcat
+				}
+				m.packageInput.SetValue(m.filter.packageName)
+				return m, nil
+
+			case "esc":
+				m.pkgInputMode = false
+				m.packageInput.Blur()
+				m.packageInput.SetValue(m.filter.packageName)
+				return m, nil
+
+			default:
+				// Delegate to textinput
+				var cmd tea.Cmd
+				m.packageInput, cmd = m.packageInput.Update(msg)
+				return m, cmd
+			}
+		}
+
+		// Normal mode key handling
 		switch msg.String() {
 		case "alt+d":
 			return m, func() tea.Msg {
 				return BackMsg{}
 			}
-		case "b":
+
+		case "alt+p":
+			m.pkgInputMode = true
+			m.packageInput.SetValue(m.filter.packageName)
+			m.packageInput.Focus()
+			return m, textinput.Blink
+
+		case "alt+b":
 			m.viewport.GotoBottom()
 			return m, nil
+
+		case "alt+c":
+			m.filter.color = !m.filter.color
+			m.Close()
+			m.scanner = nil
+			m.log = nil
+			return m, m.ConnectToLogcat
 		}
 
 	case logcatConnectedMsg:
@@ -110,9 +193,11 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update viewport to handle scrolling
-	m.viewport, cmd = m.viewport.Update(msg)
-	cmds = append(cmds, cmd)
+	// Update viewport to handle scrolling (only when not in input mode)
+	if !m.pkgInputMode {
+		m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return m, tea.Batch(cmds...)
 }
@@ -122,11 +207,63 @@ func (m LogcatModel) View() string {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
-	return m.viewport.View()
+	return fmt.Sprintf(
+		"%s\n%s\n%s",
+		m.headerView(),
+		m.viewport.View(),
+		m.footerView(),
+	)
 }
 
-func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
-	cmd := exec.Command("adb", "-s", device, "logcat")
+func (m LogcatModel) headerView() string {
+	var filters []string
+	if m.filter == (filter{}) {
+		filters = append(filters, "None")
+	} else {
+		if m.filter.packageName != "" {
+			filters = append(filters, fmt.Sprintf("[pkg: %s]", m.filter.packageName))
+		}
+		if m.filter.color {
+			filters = append(filters, "[color]")
+		}
+	}
+	title := titleStyle.Render(fmt.Sprintf("Device: %s | Filters: %s", m.Device.Name, strings.Join(filters, " ")))
+	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
+	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
+}
+
+func (m LogcatModel) footerView() string {
+	if m.pkgInputMode {
+		// Show text input for package name
+		return m.packageInput.View()
+	}
+
+	// Default: show scroll percentage
+	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
+	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
+	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
+}
+
+func (m LogcatModel) ConnectToLogcat() tea.Msg {
+	filterArgs := []string{"-s", m.Device.Id, "logcat"}
+
+	if m.filter.packageName != "" {
+		pidCmd := exec.Command("adb", "-s", m.Device.Id, "shell", "pidof", m.filter.packageName)
+		pid, err := pidCmd.Output()
+		if err != nil {
+			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid: %w", err)}
+		}
+		pidStr := strings.Trim(string(pid), "\n\r ")
+		if len(pidStr) > 0 {
+			filterArgs = append(filterArgs, fmt.Sprintf("--pid=%s", pidStr))
+		}
+	}
+
+	if m.filter.color {
+		filterArgs = append(filterArgs, "-v", "color")
+	}
+
+	cmd := exec.Command("adb", filterArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}
@@ -146,7 +283,7 @@ func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
 
 func (m LogcatModel) WaitForNextLine() tea.Msg {
 	if m.scanner == nil {
-		return logcatErrorMsg{Err: fmt.Errorf("scanner not initialized")}
+		return nil
 	}
 
 	if m.scanner.Scan() {
@@ -154,7 +291,7 @@ func (m LogcatModel) WaitForNextLine() tea.Msg {
 	}
 
 	if err := m.scanner.Err(); err != nil {
-		return logcatErrorMsg{Err: err}
+		return logcatErrorMsg{Err: fmt.Errorf("error reading logcat: %w", err)}
 	}
 
 	return nil

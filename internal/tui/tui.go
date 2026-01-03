@@ -46,16 +46,14 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "ctrl+c":
 			m.logcatView.Close()
 			return m, tea.Quit
 		}
 	case devicesui.DeviceSelectedMsg:
 		m.state = logcatView
 		m.logcatView = logcatui.New(m.viewportSize, msg.Device)
-		return m, func() tea.Msg {
-			return m.logcatView.ConnectToLogcat(msg.Device.Id)
-		}
+		return m, m.logcatView.ConnectToLogcat
 
 	case logcatui.BackMsg:
 		m.logcatView.Close()
@@ -81,9 +79,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MainModel) View() string {
-	var style = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("63"))
+	var style = lipgloss.NewStyle()
 
 	var content string
 
