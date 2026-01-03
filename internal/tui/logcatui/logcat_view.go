@@ -134,8 +134,10 @@ func (m LogcatModel) WaitForNextLine() tea.Msg {
 	return nil
 }
 
-func (m LogcatModel) Close() {
+func (m *LogcatModel) Close() {
 	if m.cmd != nil && m.cmd.Process != nil {
 		m.cmd.Process.Kill()
+		m.cmd.Wait()
+		m.cmd = nil
 	}
 }

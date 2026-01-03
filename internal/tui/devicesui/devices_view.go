@@ -90,7 +90,7 @@ func GetDevices() tea.Msg {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return getDevicesErrorMsg{Err: err}
+		return getDevicesErrorMsg{Err: fmt.Errorf("failed to get devices: %w", err)}
 	}
 
 	devices := make([]model.Device, 0)
