@@ -95,7 +95,7 @@ func GetDevices() tea.Msg {
 	lines := strings.Split(strOutput, "\n")
 	for _, l := range lines[1:] {
 		if strings.Contains(l, "device") {
-			parts := strings.Split(l, " ")
+			parts := strings.Fields(l)
 			if len(parts) == 0 {
 				continue
 			}
