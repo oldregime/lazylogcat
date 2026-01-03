@@ -10,6 +10,8 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
+const maxLogLines = 10000
+
 type LogcatModel struct {
 	cmd     *exec.Cmd
 	scanner *bufio.Scanner
@@ -56,6 +58,9 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			}
 		}
 	case logcatLineMsg:
+		if len(m.log) >= maxLogLines {
+			m.log = m.log[1:]
+		}
 		m.log = append(m.log, message{
 			text:   msg.Line + "\n",
 			source: logcatMessage,
