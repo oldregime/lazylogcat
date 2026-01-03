@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
@@ -13,11 +14,13 @@ import (
 const maxLogLines = 10000
 
 type LogcatModel struct {
-	cmd     *exec.Cmd
-	scanner *bufio.Scanner
-	log     []message
-	Device  model.Device
-	err     error
+	viewportSize model.Size
+	viewport     viewport.Model
+	cmd          *exec.Cmd
+	scanner      *bufio.Scanner
+	log          []message
+	Device       model.Device
+	err          error
 }
 
 type message struct {
@@ -47,13 +50,21 @@ type logcatConnectedMsg struct {
 
 type BackMsg struct{}
 
-func New(device model.Device) LogcatModel {
+func New(viewportSize model.Size, device model.Device) LogcatModel {
+	vp := viewport.New(viewportSize.Width, viewportSize.Height)
 	return LogcatModel{
-		Device: device,
+		viewportSize: viewportSize,
+		viewport:     vp,
+		Device:       device,
 	}
 }
 
 func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -61,13 +72,19 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			return m, func() tea.Msg {
 				return BackMsg{}
 			}
+		case "b":
+			m.viewport.GotoBottom()
+			return m, nil
 		}
+
 	case logcatConnectedMsg:
 		m.cmd = msg.cmd
 		m.scanner = msg.scanner
-		return m, m.WaitForNextLine
+		cmds = append(cmds, m.WaitForNextLine)
 
 	case logcatLineMsg:
+		wasAtBottom := m.viewport.AtBottom()
+
 		if len(m.log) >= maxLogLines {
 			m.log = m.log[1:]
 		}
@@ -75,14 +92,29 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			text:   msg.Line + "\n",
 			source: logcatMessage,
 		})
-		return m, m.WaitForNextLine
+
+		var b strings.Builder
+		for _, msg := range m.log {
+			b.WriteString(msg.text)
+		}
+		m.viewport.SetContent(b.String())
+
+		if wasAtBottom {
+			m.viewport.GotoBottom()
+		}
+
+		cmds = append(cmds, m.WaitForNextLine)
 
 	case logcatErrorMsg:
 		m.err = msg.Err
 		return m, nil
 	}
 
-	return m, nil
+	// Update viewport to handle scrolling
+	m.viewport, cmd = m.viewport.Update(msg)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m LogcatModel) View() string {
@@ -90,17 +122,11 @@ func (m LogcatModel) View() string {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
-	var b strings.Builder
-
-	for _, message := range m.log {
-		b.WriteString(message.text)
-	}
-
-	return b.String()
+	return m.viewport.View()
 }
 
 func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
-	cmd := exec.Command("adb", "-s", device, "logcat", "-v", "color")
+	cmd := exec.Command("adb", "-s", device, "logcat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}

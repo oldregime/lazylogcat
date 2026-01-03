@@ -3,6 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/devicesui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 )
@@ -15,9 +16,10 @@ const (
 )
 
 type MainModel struct {
-	state       sessionState
-	devicesView devicesui.DeviceSelectionModel
-	logcatView  logcatui.LogcatModel
+	viewportSize model.Size
+	state        sessionState
+	devicesView  devicesui.DeviceSelectionModel
+	logcatView   logcatui.LogcatModel
 }
 
 func InitMainModel() MainModel {
@@ -36,6 +38,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.viewportSize = model.Size{
+			Width:  msg.Width,
+			Height: msg.Height,
+		}
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -44,7 +52,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case devicesui.DeviceSelectedMsg:
 		m.state = logcatView
-		m.logcatView = logcatui.New(msg.Device)
+		m.logcatView = logcatui.New(m.viewportSize, msg.Device)
 		return m, func() tea.Msg {
 			return m.logcatView.ConnectToLogcat(msg.Device.Id)
 		}

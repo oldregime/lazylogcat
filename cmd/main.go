@@ -16,7 +16,11 @@ func main() {
 	}
 	defer f.Close()
 
-	p := tea.NewProgram(tui.InitMainModel(), tea.WithAltScreen())
+	p := tea.NewProgram(
+		tui.InitMainModel(),
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)
