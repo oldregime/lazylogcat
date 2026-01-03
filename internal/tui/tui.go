@@ -21,7 +21,8 @@ type MainModel struct {
 
 func InitMainModel() MainModel {
 	return MainModel{
-		state: devicesView,
+		state:       devicesView,
+		devicesView: devicesui.New(),
 	}
 }
 

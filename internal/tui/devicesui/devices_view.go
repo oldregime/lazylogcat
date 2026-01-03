@@ -27,6 +27,10 @@ type DeviceSelectedMsg struct {
 	Device model.Device
 }
 
+func New() DeviceSelectionModel {
+	return DeviceSelectionModel{}
+}
+
 func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
