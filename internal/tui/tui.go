@@ -42,11 +42,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case devicesui.DeviceSelectedMsg:
 		m.state = logcatView
-		m.logcatView = logcatui.LogcatModel{
-			Device: msg.Device,
-		}
+		m.logcatView = logcatui.New(msg.Device)
 		return m, func() tea.Msg {
-			return logcatui.ConnectToLogcat(msg.Device.Id)
+			return m.logcatView.ConnectToLogcat(msg.Device.Id)
 		}
 
 	case logcatui.BackMsg:

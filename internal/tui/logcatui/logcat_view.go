@@ -11,10 +11,11 @@ import (
 )
 
 type LogcatModel struct {
-	cmd    *exec.Cmd
-	log    []message
-	Device model.Device
-	err    error
+	cmd     *exec.Cmd
+	scanner *bufio.Scanner
+	log     []message
+	Device  model.Device
+	err     error
 }
 
 type message struct {
@@ -39,7 +40,11 @@ type logcatErrorMsg struct {
 
 type BackMsg struct{}
 
-var globalScanner *bufio.Scanner
+func New(device model.Device) LogcatModel {
+	return LogcatModel{
+		Device: device,
+	}
+}
 
 func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -55,7 +60,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			text:   msg.Line + "\n",
 			source: logcatMessage,
 		})
-		return m, WaitForNextLine
+		return m, m.WaitForNextLine
 
 	case logcatErrorMsg:
 		m.err = msg.Err
@@ -79,7 +84,7 @@ func (m LogcatModel) View() string {
 	return b.String()
 }
 
-func ConnectToLogcat(device string) tea.Msg {
+func (m LogcatModel) ConnectToLogcat(device string) tea.Msg {
 	cmd := exec.Command("adb", "-s", device, "logcat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -90,21 +95,21 @@ func ConnectToLogcat(device string) tea.Msg {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to start adb: %w", err)}
 	}
 
-	globalScanner = bufio.NewScanner(stdout)
+	m.scanner = bufio.NewScanner(stdout)
 
-	return WaitForNextLine()
+	return m.WaitForNextLine()
 }
 
-func WaitForNextLine() tea.Msg {
-	if globalScanner == nil {
+func (m LogcatModel) WaitForNextLine() tea.Msg {
+	if m.scanner == nil {
 		return logcatErrorMsg{Err: fmt.Errorf("scanner not initialized")}
 	}
 
-	if globalScanner.Scan() {
-		return logcatLineMsg{Line: globalScanner.Text()}
+	if m.scanner.Scan() {
+		return logcatLineMsg{Line: m.scanner.Text()}
 	}
 
-	if err := globalScanner.Err(); err != nil {
+	if err := m.scanner.Err(); err != nil {
 		return logcatErrorMsg{Err: err}
 	}
 
