@@ -8,6 +8,8 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 )
 
+var style = lipgloss.NewStyle()
+
 type sessionState int
 
 const (
@@ -79,7 +81,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MainModel) View() string {
-	var style = lipgloss.NewStyle()
+	style = style.Width(m.viewportSize.Width).
+		Height(m.viewportSize.Height)
 
 	var content string
 

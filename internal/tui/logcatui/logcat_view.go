@@ -180,7 +180,8 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		for _, msg := range m.log {
 			b.WriteString(msg.text)
 		}
-		m.viewport.SetContent(b.String())
+		wrapped := lipgloss.NewStyle().Width(m.viewport.Width).Render(b.String())
+		m.viewport.SetContent(wrapped)
 
 		if wasAtBottom {
 			m.viewport.GotoBottom()
