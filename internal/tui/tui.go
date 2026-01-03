@@ -45,6 +45,20 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Width:  msg.Width,
 			Height: msg.Height,
 		}
+		// Forward resize with allocated viewport size to child views
+		switch m.state {
+		case logcatView:
+			resizeMsg := model.Size{
+				Width:  m.viewportSize.Width,
+				Height: m.viewportSize.Height,
+			}
+			newLogcatViewing, newCmd := m.logcatView.Update(resizeMsg)
+			m.logcatView = newLogcatViewing
+			return m, newCmd
+		case devicesView:
+			// DevicesView doesn't need resize handling (simple list)
+			return m, nil
+		}
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {

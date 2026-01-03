@@ -108,6 +108,26 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	case model.Size:
+		// Handle resize from parent - update allocated viewport size
+		m.viewportSize = msg
+
+		// Recalculate header and footer heights with new width
+		headerHeight := lipgloss.Height(m.headerView())
+		footerHeight := lipgloss.Height(m.footerView())
+		m.viewport.Width = m.viewportSize.Width
+		m.viewport.Height = m.viewportSize.Height - footerHeight - headerHeight
+
+		// Re-render content with new width
+		var b strings.Builder
+		for _, msg := range m.log {
+			b.WriteString(msg.text)
+		}
+		wrapped := lipgloss.NewStyle().Width(m.viewport.Width).Render(b.String())
+		m.viewport.SetContent(wrapped)
+
+		return m, nil
+
 	case tea.KeyMsg:
 		// Handle package input mode
 		if m.pkgInputMode {
