@@ -32,20 +32,21 @@ var (
 )
 
 type LogcatModel struct {
-	viewportSize model.Size
-	viewport     viewport.Model
-	cmd          *exec.Cmd
-	scanner      *bufio.Scanner
-	device       model.Device
-	filter       filter
-	format       format
-	log          []message
-	visualMode   bool
-	currentLine  int
-	pkgInputMode bool
-	packageInput textinput.Model
-	softWrap     bool
-	err          error
+	viewportSize  model.Size
+	viewport      viewport.Model
+	cmd           *exec.Cmd
+	scanner       *bufio.Scanner
+	device        model.Device
+	filter        filter
+	format        format
+	log           []message
+	visualMode    bool
+	currentLine   int
+	startSelected int
+	pkgInputMode  bool
+	packageInput  textinput.Model
+	softWrap      bool
+	err           error
 }
 
 type message struct {
@@ -100,9 +101,10 @@ type BackMsg struct{}
 
 func New(viewportSize model.Size, device model.Device) LogcatModel {
 	m := LogcatModel{
-		viewportSize: viewportSize,
-		device:       device,
-		softWrap:     true,
+		viewportSize:  viewportSize,
+		device:        device,
+		softWrap:      true,
+		startSelected: -1,
 		format: format{
 			color: true,
 		},
@@ -224,14 +226,44 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.Close()
 			return m, m.ConnectToLogcat
 
+		case "V":
+			if m.visualMode {
+				if m.startSelected >= 0 {
+					m.startSelected = -1
+				} else {
+					m.startSelected = m.currentLine
+				}
+				m.Render()
+				return m, nil
+			}
+
+		case "esc":
+			if m.visualMode {
+				m.visualMode = false
+				m.startSelected = -1
+				m.Close()
+				return m, m.ConnectToLogcat
+			}
+
 		case "y":
 			if m.visualMode && m.currentLine >= 0 && m.currentLine < len(m.log) {
-				lineText := strings.TrimSpace(m.log[m.currentLine].text)
-				err := util.CopyToClipboard(lineText)
+				var err error
+				if m.startSelected >= 0 {
+					min := min(m.currentLine, m.startSelected)
+					max := max(m.currentLine, m.startSelected)
+					var lines []string
+					for i := min; i <= max; i++ {
+						lines = append(lines, strings.TrimSpace(m.log[i].text))
+					}
+					err = util.CopyToClipboard(lines...)
+					m.startSelected = -1
+					m.Render()
+				} else {
+					lineText := strings.TrimSpace(m.log[m.currentLine].text)
+					err = util.CopyToClipboard(lineText)
+				}
 				if err != nil {
 					slog.Error("Failed to copy to clipboard", "error", err)
-				} else {
-					slog.Info("Copied to clipboard", "line", lineText)
 				}
 			}
 			return m, nil
@@ -295,15 +327,25 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 func (m *LogcatModel) Render() {
 	var b strings.Builder
 	for i, msg := range m.log {
-		if i == m.currentLine && m.visualMode {
-			line := strings.TrimSuffix(msg.text, "\n")
-			styled := lipgloss.NewStyle().
-				Background(lipgloss.Color("240")).
-				Width(m.viewport.Width).
-				Render(line)
-			b.WriteString(styled)
-			b.WriteString("\n")
-			continue
+		if m.visualMode {
+			selected := false
+			if m.startSelected >= 0 {
+				min := min(m.currentLine, m.startSelected)
+				max := max(m.currentLine, m.startSelected)
+				selected = i >= min && i <= max
+			} else if i == m.currentLine {
+				selected = true
+			}
+			if selected {
+				line := strings.TrimSuffix(msg.text, "\n")
+				styled := lipgloss.NewStyle().
+					Background(lipgloss.Color("240")).
+					Width(m.viewport.Width).
+					Render(line)
+				b.WriteString(styled)
+				b.WriteString("\n")
+				continue
+			}
 		}
 		b.WriteString(msg.text)
 	}
@@ -319,10 +361,13 @@ func (m *LogcatModel) ensureLineVisible() {
 		return
 	}
 
+	min := min(m.currentLine, m.startSelected)
+	max := max(m.currentLine, m.startSelected)
+
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
 		line := strings.TrimSuffix(m.log[i].text, "\n")
-		if m.softWrap {
+		if m.softWrap || (m.startSelected != -1 && i >= min && i <= max) {
 			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
 		} else {
 			linesUpToCurrent++
