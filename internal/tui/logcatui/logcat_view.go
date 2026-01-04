@@ -3,6 +3,7 @@ package logcatui
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -58,13 +59,27 @@ const (
 )
 
 type filter struct {
-	packageName string
+	packageName   string
+	tagPriorities map[string]priority
 }
 
 type format struct {
 	color bool
 	tag   bool
 }
+
+type priority string
+
+const (
+	priorityVerbose priority = "V"
+	priorityDebug   priority = "D"
+	priorityInfo    priority = "I"
+	priorityWarn    priority = "W"
+	priorityError   priority = "E"
+	priorityFatal   priority = "F"
+)
+
+const priorities = "VDIWEF"
 
 type logcatLineMsg struct {
 	Line string
@@ -88,6 +103,11 @@ func New(viewportSize model.Size, device model.Device) LogcatModel {
 		softWrap:     true,
 		format: format{
 			color: true,
+		},
+		filter: filter{
+			tagPriorities: map[string]priority{
+				"*": priorityVerbose,
+			},
 		},
 	}
 
@@ -178,7 +198,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.Close()
 			return m, m.ConnectToLogcat
 
-		case "alt+d":
+		case "ctrl+d":
 			return m, func() tea.Msg {
 				return BackMsg{}
 			}
@@ -205,6 +225,13 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.format.tag = !m.format.tag
 			m.Close()
 			return m, m.ConnectToLogcat
+
+		case "p":
+			if !m.paused && !m.pkgInputMode {
+				m.filter.tagPriorities = nextTagPriority(m.filter.tagPriorities)
+				m.Close()
+				return m, m.ConnectToLogcat
+			}
 		}
 
 	case logcatConnectedMsg:
@@ -272,16 +299,19 @@ func (m LogcatModel) View() string {
 
 func (m LogcatModel) headerView() string {
 	var filters []string
-	if m.filter != (filter{}) {
+	if !m.filter.isEmpty() {
 		filters = append(filters, " | Filters:")
 		if m.filter.packageName != "" {
 			filters = append(filters, fmt.Sprintf("[pkg: %s]", m.filter.packageName))
+		}
+		if len(m.filter.tagPriorities) > 0 && m.filter.tagPriorities["*"] != priorityVerbose {
+			filters = append(filters, fmt.Sprintf("[%s]", m.filter.tagPriorities["*"]))
 		}
 	}
 
 	var formats []string
 	if m.format != (format{}) {
-		formats = append(formats, " | Format:")
+		formats = append(formats, " | Formats:")
 		if m.format.color {
 			formats = append(formats, "[color]")
 		}
@@ -334,6 +364,10 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 		args = append(args, strings.Join(formatArgs, ","))
 	}
 
+	args = append(args, fmt.Sprintf("*:%s", m.filter.tagPriorities["*"]))
+
+	slog.Debug("Executing adb", "args", args)
+
 	cmd := exec.Command("adb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -376,4 +410,28 @@ func (m *LogcatModel) Close() {
 	}
 	m.scanner = nil
 	m.log = nil
+}
+
+func (f *filter) isEmpty() bool {
+	return f.packageName == "" && (len(f.tagPriorities) == 0 || f.tagPriorities["*"] == priorityVerbose)
+}
+
+func nextTagPriority(tp map[string]priority) map[string]priority {
+	if tp == nil {
+		tp = make(map[string]priority)
+	}
+
+	if len(tp) == 0 {
+		tp["*"] = priorityDebug
+		return tp
+	}
+
+	if tp["*"] == priorityFatal {
+		tp["*"] = priorityVerbose
+		return tp
+	}
+
+	i := strings.Index(priorities, string(tp["*"]))
+	tp["*"] = priority(priorities[i+1])
+	return tp
 }

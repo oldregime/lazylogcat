@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +16,12 @@ func main() {
 		log.Fatalf("could not open log file: %v", err)
 	}
 	defer f.Close()
+
+	// Configure slog to write to the same file
+	logger := slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
 
 	p := tea.NewProgram(
 		tui.InitMainModel(),
