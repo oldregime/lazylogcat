@@ -160,6 +160,10 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		// Normal mode key handling
 		switch msg.String() {
+		case "ctrl+r":
+			m.Close()
+			return m, m.ConnectToLogcat
+
 		case "alt+d":
 			return m, func() tea.Msg {
 				return BackMsg{}
