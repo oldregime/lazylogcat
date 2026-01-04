@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 const maxLogLines = 1000
@@ -39,7 +40,8 @@ type LogcatModel struct {
 	filter       filter
 	format       format
 	log          []message
-	paused       bool
+	visualMode   bool
+	currentLine  int
 	pkgInputMode bool
 	packageInput textinput.Model
 	softWrap     bool
@@ -135,27 +137,15 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case model.Size:
-		// Handle resize from parent - update allocated viewport size
 		m.viewportSize = msg
-
-		// Recalculate header and footer heights with new width
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
 		m.viewport.Width = m.viewportSize.Width
 		m.viewport.Height = m.viewportSize.Height - footerHeight - headerHeight
-
-		// Re-render content with new width
-		var b strings.Builder
-		for _, msg := range m.log {
-			b.WriteString(msg.text)
-		}
-		wrapped := lipgloss.NewStyle().Width(m.viewport.Width).Render(b.String())
-		m.viewport.SetContent(wrapped)
-
+		m.Render()
 		return m, nil
 
 	case tea.KeyMsg:
-		// Handle package input mode
 		if m.pkgInputMode {
 			switch msg.String() {
 			case "enter":
@@ -177,24 +167,14 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				return m, nil
 
 			default:
-				// Delegate to textinput
 				var cmd tea.Cmd
 				m.packageInput, cmd = m.packageInput.Update(msg)
 				return m, cmd
 			}
 		}
 
-		// Normal mode key handling
 		switch msg.String() {
 		case "ctrl+r":
-			m.Close()
-			return m, m.ConnectToLogcat
-
-		case "ctrl+p":
-			m.paused = !m.paused
-			if m.paused {
-				return m, nil
-			}
 			m.Close()
 			return m, m.ConnectToLogcat
 
@@ -209,10 +189,6 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.packageInput.Focus()
 			return m, textinput.Blink
 
-		case "alt+b":
-			m.viewport.GotoBottom()
-			return m, nil
-
 		case "alt+w":
 			m.softWrap = !m.softWrap
 
@@ -226,11 +202,52 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.Close()
 			return m, m.ConnectToLogcat
 
+		case "G":
+			m.viewport.GotoBottom()
+			return m, nil
+
 		case "p":
-			if !m.paused && !m.pkgInputMode {
+			if !m.visualMode && !m.pkgInputMode {
 				m.filter.tagPriorities = nextTagPriority(m.filter.tagPriorities)
 				m.Close()
 				return m, m.ConnectToLogcat
+			}
+
+		case "v":
+			m.visualMode = !m.visualMode
+			if m.visualMode {
+				m.viewport.GotoBottom()
+				m.currentLine = len(m.log) - 1
+				m.Render()
+				return m, nil
+			}
+			m.Close()
+			return m, m.ConnectToLogcat
+
+		case "y":
+			if m.visualMode && m.currentLine >= 0 && m.currentLine < len(m.log) {
+				lineText := strings.TrimSpace(m.log[m.currentLine].text)
+				err := util.CopyToClipboard(lineText)
+				if err != nil {
+					slog.Error("Failed to copy to clipboard", "error", err)
+				} else {
+					slog.Info("Copied to clipboard", "line", lineText)
+				}
+			}
+			return m, nil
+
+		case "j", "down":
+			if m.visualMode && m.currentLine < len(m.log)-1 {
+				m.currentLine++
+				m.Render()
+				m.ensureLineVisible()
+			}
+
+		case "k", "up":
+			if m.visualMode && m.currentLine > 0 {
+				m.currentLine--
+				m.Render()
+				m.ensureLineVisible()
 			}
 		}
 
@@ -240,7 +257,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		cmds = append(cmds, m.WaitForNextLine)
 
 	case logcatLineMsg:
-		if m.paused {
+		if m.visualMode {
 			return m, nil
 		}
 
@@ -254,15 +271,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			source: logcatMessage,
 		})
 
-		var b strings.Builder
-		for _, msg := range m.log {
-			b.WriteString(msg.text)
-		}
-		wrapped := b.String()
-		if m.softWrap {
-			wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
-		}
-		m.viewport.SetContent(wrapped)
+		m.Render()
 
 		if wasAtBottom {
 			m.viewport.GotoBottom()
@@ -275,13 +284,56 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update viewport to handle scrolling (only when not in input mode)
-	if !m.pkgInputMode {
+	if !m.pkgInputMode && !m.visualMode {
 		m.viewport, cmd = m.viewport.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *LogcatModel) Render() {
+	var b strings.Builder
+	for i, msg := range m.log {
+		if i == m.currentLine && m.visualMode {
+			line := strings.TrimSuffix(msg.text, "\n")
+			styled := lipgloss.NewStyle().
+				Background(lipgloss.Color("240")).
+				Width(m.viewport.Width).
+				Render(line)
+			b.WriteString(styled)
+			b.WriteString("\n")
+			continue
+		}
+		b.WriteString(msg.text)
+	}
+	wrapped := b.String()
+	if m.softWrap {
+		wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
+	}
+	m.viewport.SetContent(wrapped)
+}
+
+func (m *LogcatModel) ensureLineVisible() {
+	if !m.visualMode || m.currentLine < 0 || m.currentLine >= len(m.log) {
+		return
+	}
+
+	linesUpToCurrent := 0
+	for i := 0; i <= m.currentLine; i++ {
+		line := strings.TrimSuffix(m.log[i].text, "\n")
+		if m.softWrap {
+			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
+		} else {
+			linesUpToCurrent++
+		}
+	}
+
+	if linesUpToCurrent < m.viewport.YOffset+2 {
+		m.viewport.HalfPageUp()
+	} else if linesUpToCurrent > m.viewport.YOffset+m.viewport.Height-1 {
+		m.viewport.HalfPageDown()
+	}
 }
 
 func (m LogcatModel) View() string {
@@ -327,11 +379,9 @@ func (m LogcatModel) headerView() string {
 
 func (m LogcatModel) footerView() string {
 	if m.pkgInputMode {
-		// Show text input for package name
 		return m.packageInput.View()
 	}
 
-	// Default: show scroll percentage
 	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
