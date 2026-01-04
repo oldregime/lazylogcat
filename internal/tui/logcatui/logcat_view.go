@@ -38,6 +38,7 @@ type LogcatModel struct {
 	filter       filter
 	format       format
 	log          []message
+	paused       bool
 	pkgInputMode bool
 	packageInput textinput.Model
 	softWrap     bool
@@ -85,6 +86,9 @@ func New(viewportSize model.Size, device model.Device) LogcatModel {
 		viewportSize: viewportSize,
 		device:       device,
 		softWrap:     true,
+		format: format{
+			color: true,
+		},
 	}
 
 	// Initialize text input for package filtering
@@ -166,6 +170,14 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.Close()
 			return m, m.ConnectToLogcat
 
+		case "ctrl+p":
+			m.paused = !m.paused
+			if m.paused {
+				return m, nil
+			}
+			m.Close()
+			return m, m.ConnectToLogcat
+
 		case "alt+d":
 			return m, func() tea.Msg {
 				return BackMsg{}
@@ -201,6 +213,10 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		cmds = append(cmds, m.WaitForNextLine)
 
 	case logcatLineMsg:
+		if m.paused {
+			return m, nil
+		}
+
 		wasAtBottom := m.viewport.AtBottom()
 
 		if len(m.log) >= maxLogLines {
