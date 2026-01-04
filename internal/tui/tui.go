@@ -56,8 +56,10 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logcatView = newLogcatViewing
 			return m, newCmd
 		case devicesView:
-			// DevicesView doesn't need resize handling (simple list)
-			return m, nil
+			// Forward resize to DevicesView for centering
+			newDevicesView, newCmd := m.devicesView.Update(msg)
+			m.devicesView = newDevicesView
+			return m, newCmd
 		}
 		return m, nil
 	case tea.KeyMsg:
