@@ -34,12 +34,13 @@ type LogcatModel struct {
 	viewport     viewport.Model
 	cmd          *exec.Cmd
 	scanner      *bufio.Scanner
-	Device       model.Device
+	device       model.Device
 	filter       filter
 	format       format
 	log          []message
 	pkgInputMode bool
 	packageInput textinput.Model
+	softWrap     bool
 	err          error
 }
 
@@ -82,7 +83,8 @@ type BackMsg struct{}
 func New(viewportSize model.Size, device model.Device) LogcatModel {
 	m := LogcatModel{
 		viewportSize: viewportSize,
-		Device:       device,
+		device:       device,
+		softWrap:     true,
 	}
 
 	// Initialize text input for package filtering
@@ -179,6 +181,9 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.viewport.GotoBottom()
 			return m, nil
 
+		case "alt+w":
+			m.softWrap = !m.softWrap
+
 		case "alt+c":
 			m.format.color = !m.format.color
 			m.Close()
@@ -210,7 +215,10 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		for _, msg := range m.log {
 			b.WriteString(msg.text)
 		}
-		wrapped := lipgloss.NewStyle().Width(m.viewport.Width).Render(b.String())
+		wrapped := b.String()
+		if m.softWrap {
+			wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
+		}
 		m.viewport.SetContent(wrapped)
 
 		if wasAtBottom {
@@ -266,7 +274,7 @@ func (m LogcatModel) headerView() string {
 		}
 	}
 
-	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.Device.Name, strings.Join(filters, " "), strings.Join(formats, " ")))
+	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.device.Name, strings.Join(filters, " "), strings.Join(formats, " ")))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
@@ -284,10 +292,10 @@ func (m LogcatModel) footerView() string {
 }
 
 func (m LogcatModel) ConnectToLogcat() tea.Msg {
-	args := []string{"-s", m.Device.Id, "logcat"}
+	args := []string{"-s", m.device.Id, "logcat", "-T", "60"}
 
 	if m.filter.packageName != "" {
-		pidCmd := exec.Command("adb", "-s", m.Device.Id, "shell", "pidof", m.filter.packageName)
+		pidCmd := exec.Command("adb", "-s", m.device.Id, "shell", "pidof", m.filter.packageName)
 		pid, err := pidCmd.Output()
 		if err != nil {
 			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid: %w", err)}
