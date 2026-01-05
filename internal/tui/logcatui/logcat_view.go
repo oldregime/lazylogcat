@@ -31,14 +31,21 @@ var (
 	}()
 )
 
+type logcatState int
+
+const (
+	logcatViewing logcatState = iota
+	filterManagement
+)
+
 type LogcatModel struct {
+	state         logcatState
 	viewportSize  model.Size
 	viewport      viewport.Model
 	cmd           *exec.Cmd
 	scanner       *bufio.Scanner
 	device        model.Device
-	filter        filter
-	format        format
+	filterMgmt    FilterManagementModel
 	log           []message
 	visualMode    bool
 	currentLine   int
@@ -61,29 +68,6 @@ const (
 	systemMessage messageSource = "system"
 )
 
-type filter struct {
-	packageName   string
-	tagPriorities map[string]priority
-}
-
-type format struct {
-	color bool
-	tag   bool
-}
-
-type priority string
-
-const (
-	priorityVerbose priority = "V"
-	priorityDebug   priority = "D"
-	priorityInfo    priority = "I"
-	priorityWarn    priority = "W"
-	priorityError   priority = "E"
-	priorityFatal   priority = "F"
-)
-
-const priorities = "VDIWEF"
-
 type logcatLineMsg struct {
 	Line string
 }
@@ -101,18 +85,12 @@ type BackMsg struct{}
 
 func New(viewportSize model.Size, device model.Device) LogcatModel {
 	m := LogcatModel{
+		state:         logcatViewing,
 		viewportSize:  viewportSize,
 		device:        device,
 		softWrap:      true,
 		startSelected: -1,
-		format: format{
-			color: true,
-		},
-		filter: filter{
-			tagPriorities: map[string]priority{
-				"*": priorityVerbose,
-			},
-		},
+		filterMgmt:    NewFilterManagementModel(viewportSize),
 	}
 
 	// Initialize text input for package filtering
@@ -140,6 +118,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case model.Size:
 		m.viewportSize = msg
+		m.filterMgmt.viewportSize = msg
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
 		m.viewport.Width = m.viewportSize.Width
@@ -154,18 +133,18 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				m.pkgInputMode = false
 				m.packageInput.Blur()
 				packageName := strings.TrimSpace(m.packageInput.Value())
-				if packageName != m.filter.packageName {
-					m.filter.packageName = packageName
+				if packageName != m.filterMgmt.filter.packageName {
+					m.filterMgmt.filter.packageName = packageName
 					m.Close()
 					return m, m.ConnectToLogcat
 				}
-				m.packageInput.SetValue(m.filter.packageName)
+				m.packageInput.SetValue(m.filterMgmt.filter.packageName)
 				return m, nil
 
 			case "esc":
 				m.pkgInputMode = false
 				m.packageInput.Blur()
-				m.packageInput.SetValue(m.filter.packageName)
+				m.packageInput.SetValue(m.filterMgmt.filter.packageName)
 				return m, nil
 
 			default:
@@ -173,6 +152,25 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				m.packageInput, cmd = m.packageInput.Update(msg)
 				return m, cmd
 			}
+		}
+
+		if m.state == filterManagement {
+			// Handle Esc separately to trigger reconnection
+			if msg.String() == "esc" {
+				if m.filterMgmt.ExitEditMode(true) {
+					// Changes were applied, reconnect
+					m.state = logcatViewing
+					m.Close()
+					return m, m.ConnectToLogcat
+				}
+				m.state = logcatViewing
+				return m, nil
+			}
+
+			// Route all other messages to filterMgmt
+			var cmd tea.Cmd
+			m.filterMgmt, cmd = m.filterMgmt.Update(msg)
+			return m, cmd
 		}
 
 		switch msg.String() {
@@ -185,9 +183,14 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				return BackMsg{}
 			}
 
+		case "ctrl+f":
+			m.state = filterManagement
+			m.filterMgmt.EnterEditMode()
+			return m, nil
+
 		case "alt+p":
 			m.pkgInputMode = true
-			m.packageInput.SetValue(m.filter.packageName)
+			m.packageInput.SetValue(m.filterMgmt.filter.packageName)
 			m.packageInput.Focus()
 			return m, textinput.Blink
 
@@ -195,12 +198,12 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.softWrap = !m.softWrap
 
 		case "alt+c":
-			m.format.color = !m.format.color
+			m.filterMgmt.format.color = !m.filterMgmt.format.color
 			m.Close()
 			return m, m.ConnectToLogcat
 
 		case "alt+t":
-			m.format.tag = !m.format.tag
+			m.filterMgmt.format.tag = !m.filterMgmt.format.tag
 			m.Close()
 			return m, m.ConnectToLogcat
 
@@ -210,7 +213,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		case "alt+l":
 			if !m.visualMode && !m.pkgInputMode {
-				m.filter.tagPriorities = nextTagPriority(m.filter.tagPriorities)
+				m.filterMgmt.filter.level = nextPriority(m.filterMgmt.filter.level)
 				m.Close()
 				return m, m.ConnectToLogcat
 			}
@@ -386,38 +389,92 @@ func (m LogcatModel) View() string {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
-	return fmt.Sprintf(
-		"%s\n%s\n%s",
-		m.headerView(),
-		m.viewport.View(),
-		m.footerView(),
-	)
+	switch m.state {
+	case logcatViewing:
+		return fmt.Sprintf(
+			"%s\n%s\n%s",
+			m.headerView(),
+			m.viewport.View(),
+			m.footerView(),
+		)
+	case filterManagement:
+		return m.filterManagementView()
+	}
+
+	return ""
 }
 
 func (m LogcatModel) headerView() string {
 	var filters []string
-	if !m.filter.isEmpty() {
+	if !m.filterMgmt.filter.isEmpty() {
 		filters = append(filters, " | Filters:")
-		if m.filter.packageName != "" {
-			filters = append(filters, fmt.Sprintf("[pkg: %s]", m.filter.packageName))
+		if m.filterMgmt.filter.packageName != "" {
+			filters = append(filters, fmt.Sprintf("[pkg:%s]", m.filterMgmt.filter.packageName))
 		}
-		if len(m.filter.tagPriorities) > 0 && m.filter.tagPriorities["*"] != priorityVerbose {
-			filters = append(filters, fmt.Sprintf("[%s]", m.filter.tagPriorities["*"]))
+		if m.filterMgmt.filter.level != "" && m.filterMgmt.filter.level != priorityVerbose {
+			filters = append(filters, fmt.Sprintf("[level:%s]", m.filterMgmt.filter.level))
 		}
 	}
 
 	var formats []string
-	if m.format != (format{}) {
-		formats = append(formats, " | Formats:")
-		if m.format.color {
-			formats = append(formats, "[color]")
-		}
-		if m.format.tag {
-			formats = append(formats, "[tag]")
-		}
+	var formatsStr string
+
+	// Add single-choice format (only one should be true)
+	if m.filterMgmt.format.brief {
+		formats = append(formats, "brief")
+	} else if m.filterMgmt.format.long {
+		formats = append(formats, "long")
+	} else if m.filterMgmt.format.process {
+		formats = append(formats, "process")
+	} else if m.filterMgmt.format.raw {
+		formats = append(formats, "raw")
+	} else if m.filterMgmt.format.tag {
+		formats = append(formats, "tag")
+	} else if m.filterMgmt.format.thread {
+		formats = append(formats, "thread")
+	} else if m.filterMgmt.format.threadtime {
+		formats = append(formats, "threadtime")
+	} else if m.filterMgmt.format.time {
+		formats = append(formats, "time")
 	}
 
-	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.device.Name, strings.Join(filters, " "), strings.Join(formats, " ")))
+	// Add multi-choice modifiers
+	if m.filterMgmt.format.color {
+		formats = append(formats, "color")
+	}
+	if m.filterMgmt.format.descriptive {
+		formats = append(formats, "descriptive")
+	}
+	if m.filterMgmt.format.epoch {
+		formats = append(formats, "epoch")
+	}
+	if m.filterMgmt.format.monotonic {
+		formats = append(formats, "monotonic")
+	}
+	if m.filterMgmt.format.printable {
+		formats = append(formats, "printable")
+	}
+	if m.filterMgmt.format.uid {
+		formats = append(formats, "uid")
+	}
+	if m.filterMgmt.format.usec {
+		formats = append(formats, "usec")
+	}
+	if m.filterMgmt.format.UTC {
+		formats = append(formats, "UTC")
+	}
+	if m.filterMgmt.format.year {
+		formats = append(formats, "year")
+	}
+	if m.filterMgmt.format.zone {
+		formats = append(formats, "zone")
+	}
+
+	if len(formats) > 0 {
+		formatsStr = fmt.Sprintf(" | Formats: %s", strings.Join(formats, ","))
+	}
+
+	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.device.Name, strings.Join(filters, ""), formatsStr))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
@@ -430,103 +487,4 @@ func (m LogcatModel) footerView() string {
 	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
-}
-
-func (m LogcatModel) ConnectToLogcat() tea.Msg {
-	args := []string{"-s", m.device.Id, "logcat", "-T", "60"}
-
-	if m.filter.packageName != "" {
-		pidCmd := exec.Command("adb", "-s", m.device.Id, "shell", "pidof", m.filter.packageName)
-		pid, err := pidCmd.Output()
-		if err != nil {
-			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid: %w", err)}
-		}
-		pidStr := strings.Trim(string(pid), "\n\r ")
-		if len(pidStr) > 0 {
-			args = append(args, fmt.Sprintf("--pid=%s", pidStr))
-		}
-	}
-
-	if m.format != (format{}) {
-		args = append(args, "-v")
-		var formatArgs []string
-		if m.format.color {
-			formatArgs = append(formatArgs, "color")
-		}
-		if m.format.tag {
-			formatArgs = append(formatArgs, "tag")
-		}
-		args = append(args, strings.Join(formatArgs, ","))
-	}
-
-	args = append(args, fmt.Sprintf("*:%s", m.filter.tagPriorities["*"]))
-
-	slog.Debug("Executing adb", "args", args)
-
-	cmd := exec.Command("adb", args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}
-	}
-
-	if err := cmd.Start(); err != nil {
-		return logcatErrorMsg{Err: fmt.Errorf("failed to start adb: %w", err)}
-	}
-
-	scanner := bufio.NewScanner(stdout)
-
-	return logcatConnectedMsg{
-		cmd:     cmd,
-		scanner: scanner,
-	}
-}
-
-func (m LogcatModel) WaitForNextLine() tea.Msg {
-	if m.scanner == nil {
-		return nil
-	}
-
-	if m.scanner.Scan() {
-		return logcatLineMsg{Line: m.scanner.Text()}
-	}
-
-	if err := m.scanner.Err(); err != nil {
-		return logcatErrorMsg{Err: fmt.Errorf("error reading logcat: %w", err)}
-	}
-
-	return nil
-}
-
-func (m *LogcatModel) Close() {
-	if m.cmd != nil && m.cmd.Process != nil {
-		m.cmd.Process.Kill()
-		m.cmd.Wait()
-		m.cmd = nil
-	}
-	m.scanner = nil
-	m.log = nil
-}
-
-func (f *filter) isEmpty() bool {
-	return f.packageName == "" && (len(f.tagPriorities) == 0 || f.tagPriorities["*"] == priorityVerbose)
-}
-
-func nextTagPriority(tp map[string]priority) map[string]priority {
-	if tp == nil {
-		tp = make(map[string]priority)
-	}
-
-	if len(tp) == 0 {
-		tp["*"] = priorityDebug
-		return tp
-	}
-
-	if tp["*"] == priorityFatal {
-		tp["*"] = priorityVerbose
-		return tp
-	}
-
-	i := strings.Index(priorities, string(tp["*"]))
-	tp["*"] = priority(priorities[i+1])
-	return tp
 }
