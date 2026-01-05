@@ -208,7 +208,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.viewport.GotoBottom()
 			return m, nil
 
-		case "p":
+		case "alt+l":
 			if !m.visualMode && !m.pkgInputMode {
 				m.filter.tagPriorities = nextTagPriority(m.filter.tagPriorities)
 				m.Close()
