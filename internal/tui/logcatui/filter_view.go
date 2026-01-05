@@ -2,6 +2,7 @@ package logcatui
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -17,6 +18,7 @@ type filterExitMsg struct {
 type filter struct {
 	packageName string
 	level       priority
+	tag         string
 }
 
 type format struct {
@@ -68,14 +70,20 @@ type FilterManagementModel struct {
 	formatCursor   int             // 0-7
 	modifierCursor int             // 0-9
 	packageInput   textinput.Model // Package filter input
+	tagInput       textinput.Model // Tag filter input
 	tempFilter     filter          // Working copy during editing
 	tempFormat     format          // Working copy during editing
 	validationErr  string          // Validation error message
 }
 
 func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterManagementModel {
+	pi := textinput.New()
+	pi.Placeholder = "Enter package name..."
+	pi.CharLimit = 100
+	pi.Width = viewportSize.Width - 20
+
 	ti := textinput.New()
-	ti.Placeholder = "Enter package name..."
+	ti.Placeholder = "Enter tag value..."
 	ti.CharLimit = 100
 	ti.Width = viewportSize.Width - 20
 
@@ -89,7 +97,8 @@ func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterMa
 			brief: true,
 			color: true,
 		},
-		packageInput:   ti,
+		packageInput:   pi,
+		tagInput:       ti,
 		isEditing:      false,
 		activePanel:    0,
 		formatCursor:   0,
@@ -97,12 +106,8 @@ func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterMa
 	}
 }
 
-func (m *LogcatModel) filterManagementView() string {
-	return m.filterMgmt.View()
-}
-
 func (f *filter) isEmpty() bool {
-	return f.packageName == "" && (f.level == "" || f.level == priorityVerbose)
+	return f.packageName == "" && (f.level == "" || f.level == priorityVerbose) && f.tag == ""
 }
 
 func nextPriority(p priority) priority {
@@ -127,6 +132,9 @@ func (m *FilterManagementModel) EnterEditMode() {
 
 	m.packageInput.SetValue(m.filter.packageName)
 	m.packageInput.Blur()
+
+	m.tagInput.SetValue(m.filter.tag)
+	m.tagInput.Blur()
 }
 
 func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
@@ -146,8 +154,11 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 			m.tempFilter.packageName = newPackage
 		}
 
+		m.tempFilter.tag = strings.TrimSpace(m.tagInput.Value())
+
 		filterChanged := m.filter.packageName != m.tempFilter.packageName ||
-			m.filter.level != m.tempFilter.level
+			m.filter.level != m.tempFilter.level ||
+			m.filter.tag != m.tempFilter.tag
 		formatChanged := m.format != m.tempFormat
 
 		m.filter = m.tempFilter
@@ -157,15 +168,22 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 		if m.packageInput.Focused() {
 			m.packageInput.Blur()
 		}
+		if m.tagInput.Focused() {
+			m.tagInput.Blur()
+		}
 
 		return filterChanged || formatChanged, nil
 	}
 
 	m.validationErr = ""
 	m.packageInput.SetValue(m.filter.packageName)
+	m.tagInput.SetValue(m.filter.tag)
 	m.isEditing = false
 	if m.packageInput.Focused() {
 		m.packageInput.Blur()
+	}
+	if m.tagInput.Focused() {
+		m.tagInput.Blur()
 	}
 	return false, nil
 }
@@ -221,6 +239,7 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 			apply := m.validationErr == ""
 			changed, err := m.ExitEditMode(apply)
 			if err != nil {
+				slog.Error("error exiting filter edit mode", "err", err)
 				return m, nil
 			}
 			return m, func() tea.Msg {
@@ -231,24 +250,38 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 			return m, func() tea.Msg {
 				return filterExitMsg{changed: false}
 			}
-		case "tab":
-			if m.activePanel == 2 {
+		case "tab", "shift+tab":
+			switch m.activePanel {
+			case 2:
 				m.packageInput.Blur()
+			case 3:
+				m.tagInput.Blur()
 			}
-			m.activePanel = (m.activePanel + 1) % 3
+			if msg.String() == "shift+tab" {
+				m.activePanel = (m.activePanel - 1 + 4) % 4
+			} else {
+				m.activePanel = (m.activePanel + 1) % 4
+			}
 			if m.activePanel == 2 {
 				m.packageInput.Focus()
 				return m, textinput.Blink
 			}
+			if m.activePanel == 3 {
+				m.tagInput.Focus()
+				return m, textinput.Blink
+			}
 		default:
-			// Route all other keys to package input when it's active
 			if m.activePanel == 2 {
 				var cmd tea.Cmd
 				m.packageInput, cmd = m.packageInput.Update(msg)
-				// Clear validation error when user types
 				if m.validationErr != "" {
 					m.validationErr = ""
 				}
+				return m, cmd
+			}
+			if m.activePanel == 3 {
+				var cmd tea.Cmd
+				m.tagInput, cmd = m.tagInput.Update(msg)
 				return m, cmd
 			}
 		}
@@ -279,6 +312,10 @@ func (m FilterManagementModel) View() string {
 	// Package panel below (full width)
 	packagePanel := m.renderPackagePanel()
 	b.WriteString(packagePanel + "\n\n")
+
+	// Tag panel below (full width)
+	tagPanel := m.renderTagPanel()
+	b.WriteString(tagPanel + "\n\n")
 
 	// Help text
 	help := lipgloss.NewStyle().
@@ -408,7 +445,6 @@ func (m FilterManagementModel) renderModifierPanel() (string, int) {
 func (m FilterManagementModel) renderPackagePanel() string {
 	var b strings.Builder
 
-	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("86"))
@@ -419,17 +455,14 @@ func (m FilterManagementModel) renderPackagePanel() string {
 
 	b.WriteString(panelTitleStyle.Render("Package Filter") + "\n\n")
 
-	// Text input
 	b.WriteString(m.packageInput.View())
 
-	// Display validation error if present
 	if m.validationErr != "" {
 		errorStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196"))
 		b.WriteString("\n\n" + errorStyle.Render(m.validationErr))
 	}
 
-	// Create bordered panel - full width
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
@@ -437,6 +470,34 @@ func (m FilterManagementModel) renderPackagePanel() string {
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 2 {
+		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+	}
+
+	return panelStyle.Render(b.String())
+}
+
+func (m FilterManagementModel) renderTagPanel() string {
+	var b strings.Builder
+
+	panelTitleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86"))
+
+	if m.activePanel == 3 {
+		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+	}
+
+	b.WriteString(panelTitleStyle.Render("Tag Filter (exact match)") + "\n\n")
+
+	b.WriteString(m.tagInput.View())
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1, 2).
+		Width(m.viewportSize.Width - 8)
+
+	if m.activePanel == 3 {
 		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
 	}
 

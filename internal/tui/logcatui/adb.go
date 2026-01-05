@@ -83,7 +83,12 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 		}
 	}
 
-	args = append(args, fmt.Sprintf("*:%s", m.filterMgmt.filter.level))
+	tag := "*"
+	if m.filterMgmt.filter.tag != "" {
+		tag = m.filterMgmt.filter.tag
+		args = append(args, "-s")
+	}
+	args = append(args, fmt.Sprintf("%s:%s", tag, m.filterMgmt.filter.level))
 
 	slog.Debug("Executing adb", "args", args)
 

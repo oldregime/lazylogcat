@@ -335,7 +335,7 @@ func (m LogcatModel) View() string {
 			m.footerView(),
 		)
 	case filterManagement:
-		return m.filterManagementView()
+		return m.filterMgmt.View()
 	}
 
 	return ""
@@ -350,6 +350,9 @@ func (m LogcatModel) headerView() string {
 		}
 		if m.filterMgmt.filter.level != "" && m.filterMgmt.filter.level != priorityVerbose {
 			filters = append(filters, fmt.Sprintf("[level:%s]", m.filterMgmt.filter.level))
+		}
+		if m.filterMgmt.filter.tag != "" {
+			filters = append(filters, fmt.Sprintf("[tag:%s]", m.filterMgmt.filter.tag))
 		}
 	}
 
