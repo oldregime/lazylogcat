@@ -14,12 +14,10 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 	args := []string{"-s", m.device.Id, "logcat", "-T", "60"}
 
 	if m.filterMgmt.filter.packageName != "" {
-		pidCmd := exec.Command("adb", "-s", m.device.Id, "shell", "pidof", m.filterMgmt.filter.packageName)
-		pid, err := pidCmd.Output()
+		pidStr, err := getPidByPackageName(m.device.Id, m.filterMgmt.filter.packageName)
 		if err != nil {
-			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid: %w", err)}
+			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid by package name: %w", err)}
 		}
-		pidStr := strings.Trim(string(pid), "\n\r ")
 		if len(pidStr) > 0 {
 			args = append(args, fmt.Sprintf("--pid=%s", pidStr))
 		}
@@ -131,4 +129,13 @@ func (m *LogcatModel) Close() {
 	}
 	m.scanner = nil
 	m.log = nil
+}
+
+func getPidByPackageName(deviceId string, pkg string) (string, error) {
+	pidCmd := exec.Command("adb", "-s", deviceId, "shell", "pidof", pkg)
+	pid, err := pidCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get pid: %w", err)
+	}
+	return strings.Trim(string(pid), "\n\r "), nil
 }

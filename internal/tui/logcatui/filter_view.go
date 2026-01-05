@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
+
+type filterExitMsg struct {
+	changed bool
+}
 
 type filter struct {
 	packageName string
@@ -53,28 +58,38 @@ const priorities = "VDIWEF"
 
 type FilterManagementModel struct {
 	viewportSize model.Size
+	deviceId     string // Current device ID
 	filter       filter // Current active filter state
 	format       format // Current active format state
 
 	// UI state (only used when in filter management mode)
-	isEditing      bool   // true when in filter management UI
-	activePanel    int    // 0=format, 1=modifier
-	formatCursor   int    // 0-7
-	modifierCursor int    // 0-9
-	tempFilter     filter // Working copy during editing
-	tempFormat     format // Working copy during editing
+	isEditing      bool            // true when in filter management UI
+	activePanel    int             // 0=format, 1=modifier, 2=package
+	formatCursor   int             // 0-7
+	modifierCursor int             // 0-9
+	packageInput   textinput.Model // Package filter input
+	tempFilter     filter          // Working copy during editing
+	tempFormat     format          // Working copy during editing
+	validationErr  string          // Validation error message
 }
 
-func NewFilterManagementModel(viewportSize model.Size) FilterManagementModel {
+func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterManagementModel {
+	ti := textinput.New()
+	ti.Placeholder = "Enter package name..."
+	ti.CharLimit = 100
+	ti.Width = viewportSize.Width - 20
+
 	return FilterManagementModel{
 		viewportSize: viewportSize,
+		deviceId:     deviceId,
 		filter: filter{
-			level: priorityVerbose, // Default
+			level: priorityVerbose,
 		},
 		format: format{
-			threadtime: true,
-			color:      true, // Default
+			brief: true,
+			color: true,
 		},
+		packageInput:   ti,
 		isEditing:      false,
 		activePanel:    0,
 		formatCursor:   0,
@@ -107,60 +122,134 @@ func (m *FilterManagementModel) EnterEditMode() {
 	m.activePanel = 0
 	m.formatCursor = getCurrentFormatIndex(m.format)
 	m.modifierCursor = 0
-	m.tempFilter = m.filter // Copy current state
-	m.tempFormat = m.format // Copy current state
+	m.tempFilter = m.filter
+	m.tempFormat = m.format
+
+	m.packageInput.SetValue(m.filter.packageName)
+	m.packageInput.Blur()
 }
 
-func (m *FilterManagementModel) ExitEditMode(apply bool) bool {
-	m.isEditing = false
+func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 	if apply {
-		// Apply temp changes to actual state
+		newPackage := strings.TrimSpace(m.packageInput.Value())
+
+		if newPackage != m.filter.packageName {
+			if newPackage != "" {
+				_, err := getPidByPackageName(m.deviceId, newPackage)
+				if err != nil {
+					m.validationErr = "Package not found.\nTap <ESC> to quit without saving."
+					m.isEditing = true
+					return false, err
+				}
+			}
+
+			m.tempFilter.packageName = newPackage
+		}
+
+		filterChanged := m.filter.packageName != m.tempFilter.packageName ||
+			m.filter.level != m.tempFilter.level
+		formatChanged := m.format != m.tempFormat
+
 		m.filter = m.tempFilter
 		m.format = m.tempFormat
-		return true // Signal that reconnection is needed
+
+		m.isEditing = false
+		if m.packageInput.Focused() {
+			m.packageInput.Blur()
+		}
+
+		return filterChanged || formatChanged, nil
 	}
-	// Discard temp changes
-	return false
+
+	m.validationErr = ""
+	m.packageInput.SetValue(m.filter.packageName)
+	m.isEditing = false
+	if m.packageInput.Focused() {
+		m.packageInput.Blur()
+	}
+	return false, nil
 }
 
 func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case model.Size:
 		m.viewportSize = msg
+		m.packageInput.Width = msg.Width - 20
 	case tea.KeyMsg:
 		if !m.isEditing {
 			return m, nil
 		}
 
+		if m.activePanel == 0 || m.activePanel == 1 {
+			switch msg.String() {
+			case "j", "down":
+				switch m.activePanel {
+				case 0:
+					if m.formatCursor < 7 {
+						m.formatCursor++
+					}
+				case 1:
+					if m.modifierCursor < 9 {
+						m.modifierCursor++
+					}
+				}
+			case "k", "up":
+				switch m.activePanel {
+				case 0:
+					if m.formatCursor > 0 {
+						m.formatCursor--
+					}
+				case 1:
+					if m.modifierCursor > 0 {
+						m.modifierCursor--
+					}
+				}
+			case " ", "enter":
+				switch m.activePanel {
+				case 0:
+					clearAllFormats(&m.tempFormat)
+					setFormatByIndex(&m.tempFormat, m.formatCursor)
+				case 1:
+					toggleModifierByIndex(&m.tempFormat, m.modifierCursor)
+				}
+			}
+		}
+
 		switch msg.String() {
+		case "esc":
+			// If there's a validation error, ESC should cancel (not retry validation)
+			apply := m.validationErr == ""
+			changed, err := m.ExitEditMode(apply)
+			if err != nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return filterExitMsg{changed: changed}
+			}
+		case "ctrl+q":
+			m.ExitEditMode(false)
+			return m, func() tea.Msg {
+				return filterExitMsg{changed: false}
+			}
 		case "tab":
-			m.activePanel = (m.activePanel + 1) % 2
-		case "j", "down":
-			if m.activePanel == 0 {
-				if m.formatCursor < 7 {
-					m.formatCursor++
-				}
-			} else {
-				if m.modifierCursor < 9 {
-					m.modifierCursor++
-				}
+			if m.activePanel == 2 {
+				m.packageInput.Blur()
 			}
-		case "k", "up":
-			if m.activePanel == 0 {
-				if m.formatCursor > 0 {
-					m.formatCursor--
-				}
-			} else {
-				if m.modifierCursor > 0 {
-					m.modifierCursor--
-				}
+			m.activePanel = (m.activePanel + 1) % 3
+			if m.activePanel == 2 {
+				m.packageInput.Focus()
+				return m, textinput.Blink
 			}
-		case " ", "enter":
-			if m.activePanel == 0 {
-				clearAllFormats(&m.tempFormat)
-				setFormatByIndex(&m.tempFormat, m.formatCursor)
-			} else {
-				toggleModifierByIndex(&m.tempFormat, m.modifierCursor)
+		default:
+			// Route all other keys to package input when it's active
+			if m.activePanel == 2 {
+				var cmd tea.Cmd
+				m.packageInput, cmd = m.packageInput.Update(msg)
+				// Clear validation error when user types
+				if m.validationErr != "" {
+					m.validationErr = ""
+				}
+				return m, cmd
 			}
 		}
 	}
@@ -182,15 +271,20 @@ func (m FilterManagementModel) View() string {
 	b.WriteString(title + "\n\n")
 
 	// Two panels side-by-side
-	formatPanel := m.renderFormatPanel()
-	modifierPanel := m.renderModifierPanel()
+	modifierPanel, modifierPanelHeight := m.renderModifierPanel()
+	formatPanel := m.renderFormatPanel(modifierPanelHeight)
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, formatPanel, "  ", modifierPanel)
 	b.WriteString(panels + "\n\n")
+
+	// Package panel below (full width)
+	packagePanel := m.renderPackagePanel()
+	b.WriteString(packagePanel + "\n\n")
 
 	// Help text
 	help := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
-		Render("tab switch • ↑/k up • ↓/j down • space/enter select • esc apply")
+		AlignHorizontal(lipgloss.Center).
+		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc apply • ctrl+q cancel")
 	b.WriteString(help)
 
 	// Center everything
@@ -203,7 +297,7 @@ func (m FilterManagementModel) View() string {
 	)
 }
 
-func (m FilterManagementModel) renderFormatPanel() string {
+func (m FilterManagementModel) renderFormatPanel(height int) string {
 	var b strings.Builder
 
 	// Panel title
@@ -216,7 +310,7 @@ func (m FilterManagementModel) renderFormatPanel() string {
 		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
 	}
 
-	b.WriteString(panelTitleStyle.Render("Format (single choice)") + "\n\n")
+	b.WriteString(panelTitleStyle.Render("Format") + "\n\n")
 
 	// Format options
 	formats := []struct {
@@ -246,7 +340,8 @@ func (m FilterManagementModel) renderFormatPanel() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1, 2).
-		Width(30)
+		Width(m.viewportSize.Width/2 - 4).
+		Height(height)
 
 	if m.activePanel == 0 {
 		// Active panel - highlight border
@@ -256,7 +351,7 @@ func (m FilterManagementModel) renderFormatPanel() string {
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterManagementModel) renderModifierPanel() string {
+func (m FilterManagementModel) renderModifierPanel() (string, int) {
 	var b strings.Builder
 
 	// Panel title
@@ -268,7 +363,7 @@ func (m FilterManagementModel) renderModifierPanel() string {
 		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
 	}
 
-	b.WriteString(panelTitleStyle.Render("Modifiers (multiple choice)") + "\n\n")
+	b.WriteString(panelTitleStyle.Render("Modifiers") + "\n\n")
 
 	// Modifier options
 	modifiers := []struct {
@@ -300,9 +395,48 @@ func (m FilterManagementModel) renderModifierPanel() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1, 2).
-		Width(35)
+		Width(m.viewportSize.Width/2 - 4)
 
 	if m.activePanel == 1 {
+		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+	}
+
+	result := b.String()
+	return panelStyle.Render(result), lipgloss.Height(result) + 2
+}
+
+func (m FilterManagementModel) renderPackagePanel() string {
+	var b strings.Builder
+
+	// Panel title
+	panelTitleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86"))
+
+	if m.activePanel == 2 {
+		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+	}
+
+	b.WriteString(panelTitleStyle.Render("Package Filter") + "\n\n")
+
+	// Text input
+	b.WriteString(m.packageInput.View())
+
+	// Display validation error if present
+	if m.validationErr != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196"))
+		b.WriteString("\n\n" + errorStyle.Render(m.validationErr))
+	}
+
+	// Create bordered panel - full width
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1, 2).
+		Width(m.viewportSize.Width - 8)
+
+	if m.activePanel == 2 {
 		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
 	}
 

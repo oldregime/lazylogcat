@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -50,8 +49,6 @@ type LogcatModel struct {
 	visualMode    bool
 	currentLine   int
 	startSelected int
-	pkgInputMode  bool
-	packageInput  textinput.Model
 	softWrap      bool
 	err           error
 }
@@ -90,16 +87,8 @@ func New(viewportSize model.Size, device model.Device) LogcatModel {
 		device:        device,
 		softWrap:      true,
 		startSelected: -1,
-		filterMgmt:    NewFilterManagementModel(viewportSize),
+		filterMgmt:    NewFilterManagementModel(viewportSize, device.Id),
 	}
-
-	// Initialize text input for package filtering
-	ti := textinput.New()
-	ti.Placeholder = "Enter package name..."
-	ti.Prompt = "Package: "
-	ti.CharLimit = 100
-	ti.Width = viewportSize.Width - 20
-	m.packageInput = ti
 
 	headerHeight := lipgloss.Height(m.headerView())
 	footerHeight := lipgloss.Height(m.footerView())
@@ -126,52 +115,19 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		m.Render()
 		return m, nil
 
+	case filterExitMsg:
+		m.state = logcatViewing
+		m.Close()
+		return m, m.ConnectToLogcat
+	}
+
+	if m.state == filterManagement {
+		m.filterMgmt, cmd = m.filterMgmt.Update(msg)
+		return m, cmd
+	}
+
+	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.pkgInputMode {
-			switch msg.String() {
-			case "enter":
-				m.pkgInputMode = false
-				m.packageInput.Blur()
-				packageName := strings.TrimSpace(m.packageInput.Value())
-				if packageName != m.filterMgmt.filter.packageName {
-					m.filterMgmt.filter.packageName = packageName
-					m.Close()
-					return m, m.ConnectToLogcat
-				}
-				m.packageInput.SetValue(m.filterMgmt.filter.packageName)
-				return m, nil
-
-			case "esc":
-				m.pkgInputMode = false
-				m.packageInput.Blur()
-				m.packageInput.SetValue(m.filterMgmt.filter.packageName)
-				return m, nil
-
-			default:
-				var cmd tea.Cmd
-				m.packageInput, cmd = m.packageInput.Update(msg)
-				return m, cmd
-			}
-		}
-
-		if m.state == filterManagement {
-			// Handle Esc separately to trigger reconnection
-			if msg.String() == "esc" {
-				if m.filterMgmt.ExitEditMode(true) {
-					// Changes were applied, reconnect
-					m.state = logcatViewing
-					m.Close()
-					return m, m.ConnectToLogcat
-				}
-				m.state = logcatViewing
-				return m, nil
-			}
-
-			// Route all other messages to filterMgmt
-			var cmd tea.Cmd
-			m.filterMgmt, cmd = m.filterMgmt.Update(msg)
-			return m, cmd
-		}
 
 		switch msg.String() {
 		case "ctrl+r":
@@ -188,19 +144,8 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.filterMgmt.EnterEditMode()
 			return m, nil
 
-		case "alt+p":
-			m.pkgInputMode = true
-			m.packageInput.SetValue(m.filterMgmt.filter.packageName)
-			m.packageInput.Focus()
-			return m, textinput.Blink
-
 		case "alt+w":
 			m.softWrap = !m.softWrap
-
-		case "alt+c":
-			m.filterMgmt.format.color = !m.filterMgmt.format.color
-			m.Close()
-			return m, m.ConnectToLogcat
 
 		case "alt+t":
 			m.filterMgmt.format.tag = !m.filterMgmt.format.tag
@@ -212,7 +157,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			return m, nil
 
 		case "alt+l":
-			if !m.visualMode && !m.pkgInputMode {
+			if !m.visualMode {
 				m.filterMgmt.filter.level = nextPriority(m.filterMgmt.filter.level)
 				m.Close()
 				return m, m.ConnectToLogcat
@@ -319,7 +264,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		return m, nil
 	}
 
-	if !m.pkgInputMode && !m.visualMode {
+	if !m.visualMode {
 		m.viewport, cmd = m.viewport.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -480,10 +425,6 @@ func (m LogcatModel) headerView() string {
 }
 
 func (m LogcatModel) footerView() string {
-	if m.pkgInputMode {
-		return m.packageInput.View()
-	}
-
 	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
