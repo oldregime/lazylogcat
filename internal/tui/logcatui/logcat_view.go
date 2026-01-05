@@ -23,11 +23,8 @@ var (
 		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
 	}()
 
-	infoStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Left = "┤"
-		return titleStyle.BorderStyle(b)
-	}()
+	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d back • alt+w toggle wrap • alt+l toggle level • G jump to recent • v visual"
+	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
 type logcatState int
@@ -146,11 +143,6 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		case "alt+w":
 			m.softWrap = !m.softWrap
-
-		case "alt+t":
-			m.filterMgmt.format.tag = !m.filterMgmt.format.tag
-			m.Close()
-			return m, m.ConnectToLogcat
 
 		case "G":
 			m.viewport.GotoBottom()
@@ -425,7 +417,16 @@ func (m LogcatModel) headerView() string {
 }
 
 func (m LogcatModel) footerView() string {
-	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
-	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
-	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
+	var helpText string
+	if m.visualMode {
+		helpText = helpTextVisual
+	} else {
+		helpText = helpTextNormal
+	}
+
+	help := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Render(helpText)
+
+	return help
 }
