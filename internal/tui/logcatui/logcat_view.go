@@ -354,6 +354,9 @@ func (m LogcatModel) headerView() string {
 		if m.filterMgmt.filter.tag != "" {
 			filters = append(filters, fmt.Sprintf("[tag:%s]", m.filterMgmt.filter.tag))
 		}
+		if m.filterMgmt.filter.text != "" {
+			filters = append(filters, fmt.Sprintf("[text:%s]", m.filterMgmt.filter.text))
+		}
 	}
 
 	var formats []string

@@ -116,6 +116,14 @@ func (m LogcatModel) WaitForNextLine() tea.Msg {
 	}
 
 	if m.scanner.Scan() {
+		s := m.scanner.Text()
+		if strings.Trim(s, "\n\r ") == "" {
+			return m.WaitForNextLine()
+		}
+		f := m.filterMgmt.filter.text
+		if f != "" && !strings.Contains(s, f) {
+			return m.WaitForNextLine()
+		}
 		return logcatLineMsg{Line: m.scanner.Text()}
 	}
 

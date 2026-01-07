@@ -19,6 +19,7 @@ type filter struct {
 	packageName string
 	level       priority
 	tag         string
+	text        string
 }
 
 type format struct {
@@ -71,6 +72,7 @@ type FilterManagementModel struct {
 	modifierCursor int             // 0-9
 	packageInput   textinput.Model // Package filter input
 	tagInput       textinput.Model // Tag filter input
+	textInput      textinput.Model // Text filter input
 	tempFilter     filter          // Working copy during editing
 	tempFormat     format          // Working copy during editing
 	validationErr  string          // Validation error message
@@ -87,6 +89,11 @@ func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterMa
 	ti.CharLimit = 100
 	ti.Width = viewportSize.Width - 20
 
+	txtInput := textinput.New()
+	txtInput.Placeholder = "Enter text to search..."
+	txtInput.CharLimit = 100
+	txtInput.Width = viewportSize.Width - 20
+
 	return FilterManagementModel{
 		viewportSize: viewportSize,
 		deviceId:     deviceId,
@@ -99,6 +106,7 @@ func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterMa
 		},
 		packageInput:   pi,
 		tagInput:       ti,
+		textInput:      txtInput,
 		isEditing:      false,
 		activePanel:    0,
 		formatCursor:   0,
@@ -107,7 +115,10 @@ func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterMa
 }
 
 func (f *filter) isEmpty() bool {
-	return f.packageName == "" && (f.level == "" || f.level == priorityVerbose) && f.tag == ""
+	return f.packageName == "" &&
+		(f.level == "" || f.level == priorityVerbose) &&
+		f.tag == "" &&
+		f.text == ""
 }
 
 func nextPriority(p priority) priority {
@@ -135,6 +146,9 @@ func (m *FilterManagementModel) EnterEditMode() {
 
 	m.tagInput.SetValue(m.filter.tag)
 	m.tagInput.Blur()
+
+	m.textInput.SetValue(m.filter.text)
+	m.textInput.Blur()
 }
 
 func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
@@ -155,10 +169,12 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 		}
 
 		m.tempFilter.tag = strings.TrimSpace(m.tagInput.Value())
+		m.tempFilter.text = strings.TrimSpace(m.textInput.Value())
 
 		filterChanged := m.filter.packageName != m.tempFilter.packageName ||
 			m.filter.level != m.tempFilter.level ||
-			m.filter.tag != m.tempFilter.tag
+			m.filter.tag != m.tempFilter.tag ||
+			m.filter.text != m.tempFilter.text
 		formatChanged := m.format != m.tempFormat
 
 		m.filter = m.tempFilter
@@ -171,6 +187,9 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 		if m.tagInput.Focused() {
 			m.tagInput.Blur()
 		}
+		if m.textInput.Focused() {
+			m.textInput.Blur()
+		}
 
 		return filterChanged || formatChanged, nil
 	}
@@ -178,12 +197,16 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 	m.validationErr = ""
 	m.packageInput.SetValue(m.filter.packageName)
 	m.tagInput.SetValue(m.filter.tag)
+	m.textInput.SetValue(m.filter.text)
 	m.isEditing = false
 	if m.packageInput.Focused() {
 		m.packageInput.Blur()
 	}
 	if m.tagInput.Focused() {
 		m.tagInput.Blur()
+	}
+	if m.textInput.Focused() {
+		m.textInput.Blur()
 	}
 	return false, nil
 }
@@ -193,6 +216,8 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 	case model.Size:
 		m.viewportSize = msg
 		m.packageInput.Width = msg.Width - 20
+		m.tagInput.Width = msg.Width - 20
+		m.textInput.Width = msg.Width - 20
 	case tea.KeyMsg:
 		if !m.isEditing {
 			return m, nil
@@ -256,11 +281,13 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 				m.packageInput.Blur()
 			case 3:
 				m.tagInput.Blur()
+			case 4:
+				m.textInput.Blur()
 			}
 			if msg.String() == "shift+tab" {
-				m.activePanel = (m.activePanel - 1 + 4) % 4
+				m.activePanel = (m.activePanel - 1 + 5) % 5
 			} else {
-				m.activePanel = (m.activePanel + 1) % 4
+				m.activePanel = (m.activePanel + 1) % 5
 			}
 			if m.activePanel == 2 {
 				m.packageInput.Focus()
@@ -268,6 +295,10 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 			}
 			if m.activePanel == 3 {
 				m.tagInput.Focus()
+				return m, textinput.Blink
+			}
+			if m.activePanel == 4 {
+				m.textInput.Focus()
 				return m, textinput.Blink
 			}
 		default:
@@ -282,6 +313,11 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 			if m.activePanel == 3 {
 				var cmd tea.Cmd
 				m.tagInput, cmd = m.tagInput.Update(msg)
+				return m, cmd
+			}
+			if m.activePanel == 4 {
+				var cmd tea.Cmd
+				m.textInput, cmd = m.textInput.Update(msg)
 				return m, cmd
 			}
 		}
@@ -316,6 +352,10 @@ func (m FilterManagementModel) View() string {
 	// Tag panel below (full width)
 	tagPanel := m.renderTagPanel()
 	b.WriteString(tagPanel + "\n\n")
+
+	// Text panel below (full width)
+	textPanel := m.renderTextPanel()
+	b.WriteString(textPanel + "\n\n")
 
 	// Help text
 	help := lipgloss.NewStyle().
@@ -498,6 +538,34 @@ func (m FilterManagementModel) renderTagPanel() string {
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 3 {
+		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+	}
+
+	return panelStyle.Render(b.String())
+}
+
+func (m FilterManagementModel) renderTextPanel() string {
+	var b strings.Builder
+
+	panelTitleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86"))
+
+	if m.activePanel == 4 {
+		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+	}
+
+	b.WriteString(panelTitleStyle.Render("Text Filter (substring match)") + "\n\n")
+
+	b.WriteString(m.textInput.View())
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1, 2).
+		Width(m.viewportSize.Width - 8)
+
+	if m.activePanel == 4 {
 		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
 	}
 
