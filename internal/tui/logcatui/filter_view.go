@@ -160,7 +160,7 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 			if newPackage != "" {
 				_, err := getPidByPackageName(m.deviceId, newPackage)
 				if err != nil {
-					m.validationErr = "Package not found.\nTap <ESC> to quit without saving."
+					m.validationErr = "Package not found."
 					m.isEditing = true
 					return false, err
 				}
@@ -260,10 +260,8 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 		}
 
 		switch msg.String() {
-		case "esc":
-			// If there's a validation error, ESC should cancel (not retry validation)
-			apply := m.validationErr == ""
-			changed, err := m.ExitEditMode(apply)
+		case "ctrl+s":
+			changed, err := m.ExitEditMode(true)
 			if err != nil {
 				slog.Error("error exiting filter edit mode", "err", err)
 				return m, nil
@@ -271,7 +269,8 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 			return m, func() tea.Msg {
 				return filterExitMsg{changed: changed}
 			}
-		case "ctrl+q":
+
+		case "esc":
 			m.ExitEditMode(false)
 			return m, func() tea.Msg {
 				return filterExitMsg{changed: false}
@@ -362,7 +361,7 @@ func (m FilterManagementModel) View() string {
 	help := lipgloss.NewStyle().
 		Foreground(theme.FGHelp).
 		AlignHorizontal(lipgloss.Center).
-		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc apply • ctrl+q cancel")
+		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc back • ctrl+s apply")
 	b.WriteString(help)
 
 	// Center everything
