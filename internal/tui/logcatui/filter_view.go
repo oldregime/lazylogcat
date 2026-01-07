@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
 type filterExitMsg struct {
@@ -335,7 +336,7 @@ func (m FilterManagementModel) View() string {
 	// Title
 	title := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86")).
+		Foreground(theme.FGTitle).
 		Render("Format Management")
 	b.WriteString(title + "\n\n")
 
@@ -359,7 +360,7 @@ func (m FilterManagementModel) View() string {
 
 	// Help text
 	help := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+		Foreground(theme.FGHelp).
 		AlignHorizontal(lipgloss.Center).
 		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc apply • ctrl+q cancel")
 	b.WriteString(help)
@@ -380,11 +381,11 @@ func (m FilterManagementModel) renderFormatPanel(height int) string {
 	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86"))
+		Foreground(theme.FGTitle)
 
 	if m.activePanel == 0 {
 		// Active panel - use purple highlight
-		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Format") + "\n\n")
@@ -415,14 +416,14 @@ func (m FilterManagementModel) renderFormatPanel(height int) string {
 	// Create bordered panel
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		Padding(1, 2).
 		Width(m.viewportSize.Width/2 - 4).
 		Height(height)
 
 	if m.activePanel == 0 {
 		// Active panel - highlight border
-		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
 	}
 
 	return panelStyle.Render(b.String())
@@ -434,10 +435,10 @@ func (m FilterManagementModel) renderModifierPanel() (string, int) {
 	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86"))
+		Foreground(theme.FGTitle)
 
 	if m.activePanel == 1 {
-		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Modifiers") + "\n\n")
@@ -470,12 +471,12 @@ func (m FilterManagementModel) renderModifierPanel() (string, int) {
 	// Create bordered panel
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		Padding(1, 2).
 		Width(m.viewportSize.Width/2 - 4)
 
 	if m.activePanel == 1 {
-		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
 	}
 
 	result := b.String()
@@ -487,10 +488,10 @@ func (m FilterManagementModel) renderPackagePanel() string {
 
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86"))
+		Foreground(theme.FGTitle)
 
 	if m.activePanel == 2 {
-		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Package Filter") + "\n\n")
@@ -499,18 +500,18 @@ func (m FilterManagementModel) renderPackagePanel() string {
 
 	if m.validationErr != "" {
 		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196"))
+			Foreground(theme.FGError)
 		b.WriteString("\n\n" + errorStyle.Render(m.validationErr))
 	}
 
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		Padding(1, 2).
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 2 {
-		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
 	}
 
 	return panelStyle.Render(b.String())
@@ -521,10 +522,10 @@ func (m FilterManagementModel) renderTagPanel() string {
 
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86"))
+		Foreground(theme.FGTitle)
 
 	if m.activePanel == 3 {
-		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Tag Filter (exact match)") + "\n\n")
@@ -533,12 +534,12 @@ func (m FilterManagementModel) renderTagPanel() string {
 
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		Padding(1, 2).
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 3 {
-		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
 	}
 
 	return panelStyle.Render(b.String())
@@ -549,10 +550,10 @@ func (m FilterManagementModel) renderTextPanel() string {
 
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86"))
+		Foreground(theme.FGTitle)
 
 	if m.activePanel == 4 {
-		panelTitleStyle = panelTitleStyle.Foreground(lipgloss.Color("57"))
+		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Text Filter (substring match)") + "\n\n")
@@ -561,12 +562,12 @@ func (m FilterManagementModel) renderTextPanel() string {
 
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		Padding(1, 2).
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 4 {
-		panelStyle = panelStyle.BorderForeground(lipgloss.Color("57"))
+		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
 	}
 
 	return panelStyle.Render(b.String())
@@ -583,7 +584,8 @@ func (m FilterManagementModel) renderRadioButton(label string, selected bool, cu
 	if cursor {
 		// Highlight current cursor position
 		return lipgloss.NewStyle().
-			Background(lipgloss.Color("240")).
+			Background(theme.BGCursor).
+			Foreground(theme.FGSelected).
 			Width(25).
 			Render(line)
 	}
@@ -601,7 +603,8 @@ func (m FilterManagementModel) renderCheckbox(label string, checked bool, cursor
 
 	if cursor {
 		return lipgloss.NewStyle().
-			Background(lipgloss.Color("240")).
+			Background(theme.BGCursor).
+			Foreground(theme.FGSelected).
 			Width(30).
 			Render(line)
 	}

@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
@@ -279,7 +280,7 @@ func (m *LogcatModel) Render() {
 			if selected {
 				line := strings.TrimSuffix(msg.text, "\n")
 				styled := lipgloss.NewStyle().
-					Background(lipgloss.Color("240")).
+					Background(theme.BGCursor).
 					Width(m.viewport.Width).
 					Render(line)
 				b.WriteString(styled)
@@ -431,7 +432,7 @@ func (m LogcatModel) footerView() string {
 	}
 
 	help := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+		Foreground(theme.FGHelp).
 		Render(helpText)
 
 	return help

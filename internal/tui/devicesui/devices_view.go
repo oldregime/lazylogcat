@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
 type DeviceSelectionModel struct {
@@ -45,13 +46,13 @@ func New() DeviceSelectionModel {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(theme.FGBorder).
 		BorderBottom(true).
 		Bold(false)
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
+		Foreground(theme.FGSelected).
+		Background(theme.BGCursor).
+		Bold(true)
 	t.SetStyles(s)
 
 	return DeviceSelectionModel{
@@ -128,11 +129,11 @@ func (m DeviceSelectionModel) View() string {
 
 	title := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86")).
+		Foreground(theme.FGTitle).
 		Render("Select a Device")
 
 	help := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+		Foreground(theme.FGHelp).
 		Render("↑/k up • ↓/j down • enter select • r refresh • ctrl+c quit")
 
 	b.WriteString(title + "\n\n")
