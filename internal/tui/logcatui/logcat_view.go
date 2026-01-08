@@ -277,10 +277,12 @@ func (m *LogcatModel) Render() {
 			} else if i == m.currentLine {
 				selected = true
 			}
+			line := strings.TrimSuffix(msg.text, "\n")
 			if selected {
-				line := strings.TrimSuffix(msg.text, "\n")
 				styled := lipgloss.NewStyle().
+					Bold(true).
 					Background(theme.BGCursor).
+					Foreground(theme.FGSelected).
 					Width(m.viewport.Width).
 					Render(line)
 				b.WriteString(styled)
@@ -288,7 +290,16 @@ func (m *LogcatModel) Render() {
 				continue
 			}
 		}
-		b.WriteString(msg.text)
+		if m.filterMgmt.format.color {
+			line := strings.TrimSuffix(msg.text, "\n")
+			styled := lipgloss.NewStyle().
+				Foreground(theme.GetLogColor(util.GetLogLevel(line))).
+				Width(m.viewport.Width).
+				Render(line)
+			b.WriteString(styled)
+		} else {
+			b.WriteString(msg.text)
+		}
 	}
 	wrapped := b.String()
 	if m.softWrap {

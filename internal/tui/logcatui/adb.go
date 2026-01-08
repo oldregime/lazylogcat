@@ -47,9 +47,9 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 		}
 
 		// Add multi-choice modifiers
-		if m.filterMgmt.format.color {
-			formats = append(formats, "color")
-		}
+		// if m.filterMgmt.format.color {
+		// 	formats = append(formats, "color")
+		// }
 		if m.filterMgmt.format.descriptive {
 			formats = append(formats, "descriptive")
 		}

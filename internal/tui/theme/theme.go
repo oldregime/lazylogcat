@@ -53,3 +53,22 @@ var (
 	// BGCursor is used for cursor/selection highlight backgrounds
 	BGCursor = lipgloss.AdaptiveColor{Light: black, Dark: black}
 )
+
+func GetLogColor(level string) lipgloss.AdaptiveColor {
+	switch level {
+	case "V":
+		return lipgloss.AdaptiveColor{Light: brightBlack, Dark: brightBlack}
+	case "D":
+		return lipgloss.AdaptiveColor{Light: blue, Dark: blue}
+	case "I":
+		return lipgloss.AdaptiveColor{Light: green, Dark: green}
+	case "W":
+		return lipgloss.AdaptiveColor{Light: yellow, Dark: yellow}
+	case "E":
+		return lipgloss.AdaptiveColor{Light: red, Dark: red}
+	case "F":
+		return lipgloss.AdaptiveColor{Light: magenta, Dark: magenta}
+	default:
+		return lipgloss.AdaptiveColor{Light: black, Dark: black}
+	}
+}
