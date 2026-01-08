@@ -24,7 +24,7 @@ var (
 		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d back • alt+w toggle wrap • alt+l toggle level • G jump to recent • v visual"
+	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • alt+w toggle wrap • alt+l toggle level • G jump to recent • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
@@ -60,7 +60,6 @@ type messageSource string
 
 const (
 	logcatMessage messageSource = "logcat"
-	systemMessage messageSource = "system"
 )
 
 type logcatLineMsg struct {
@@ -180,6 +179,11 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		case "esc":
 			if m.visualMode {
+				if m.startSelected >= 0 {
+					m.startSelected = -1
+					m.Render()
+					return m, nil
+				}
 				m.visualMode = false
 				m.startSelected = -1
 				m.Close()
