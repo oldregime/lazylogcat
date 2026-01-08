@@ -57,7 +57,7 @@ var (
 func GetLogColor(level string) lipgloss.AdaptiveColor {
 	switch level {
 	case "V":
-		return lipgloss.AdaptiveColor{Light: brightBlack, Dark: brightBlack}
+		return lipgloss.AdaptiveColor{}
 	case "D":
 		return lipgloss.AdaptiveColor{Light: blue, Dark: blue}
 	case "I":
@@ -69,6 +69,6 @@ func GetLogColor(level string) lipgloss.AdaptiveColor {
 	case "F":
 		return lipgloss.AdaptiveColor{Light: magenta, Dark: magenta}
 	default:
-		return lipgloss.AdaptiveColor{Light: black, Dark: black}
+		return lipgloss.AdaptiveColor{}
 	}
 }

@@ -75,7 +75,9 @@ type logcatConnectedMsg struct {
 	scanner *bufio.Scanner
 }
 
-type BackMsg struct{}
+type GoToDevices struct {
+	Selected *model.Device
+}
 
 func New(viewportSize model.Size, device model.Device) LogcatModel {
 	m := LogcatModel{
@@ -133,7 +135,9 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		case "ctrl+d":
 			return m, func() tea.Msg {
-				return BackMsg{}
+				return GoToDevices{
+					Selected: &m.device,
+				}
 			}
 
 		case "ctrl+f":

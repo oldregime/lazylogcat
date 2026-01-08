@@ -13,13 +13,15 @@ import (
 
 type DeviceSelectionModel struct {
 	devices      []model.Device
+	selected     *model.Device
 	cursor       int
 	viewportSize model.Size
 	err          error
 }
 
 type getDevicesMsg struct {
-	Devices []model.Device
+	devices  []model.Device
+	selected *model.Device
 }
 
 type getDevicesErrorMsg struct {
@@ -48,7 +50,9 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "r":
-			return m, GetDevices
+			return m, func() tea.Msg {
+				return GetDevices(m.selected)
+			}
 
 		case "j", "down":
 			if len(m.devices) > 0 && m.cursor < len(m.devices)-1 {
@@ -73,8 +77,18 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 		}
 
 	case getDevicesMsg:
-		m.devices = msg.Devices
-		m.cursor = 0 // Reset cursor on refresh
+		m.devices = msg.devices
+		if msg.selected != nil {
+			for i, device := range m.devices {
+				if device.Id == msg.selected.Id {
+					m.cursor = i
+					m.selected = msg.selected
+					break
+				}
+			}
+		} else {
+			m.cursor = 0
+		}
 		return m, nil
 
 	case getDevicesErrorMsg:
@@ -163,7 +177,11 @@ func (m DeviceSelectionModel) renderDevicePanel() string {
 				label = label[:maxLabelLen-3] + "..."
 			}
 
-			line := m.renderRadioButton(label, false, i == m.cursor)
+			selected := false
+			if m.selected != nil && m.selected.Id == device.Id {
+				selected = true
+			}
+			line := m.renderRadioButton(label, selected, i == m.cursor)
 			b.WriteString(line + "\n")
 		}
 	}
@@ -194,7 +212,7 @@ func (m DeviceSelectionModel) renderDevicePanelWithHelp() string {
 	return b.String()
 }
 
-func GetDevices() tea.Msg {
+func GetDevices(selected *model.Device) tea.Msg {
 	cmd := exec.Command("adb", "devices", "-l")
 
 	output, err := cmd.Output()
@@ -206,6 +224,7 @@ func GetDevices() tea.Msg {
 
 	strOutput := string(output)
 	lines := strings.Split(strOutput, "\n")
+	var preSelected *model.Device
 	for _, l := range lines[1:] {
 		if strings.Contains(l, "device") {
 			parts := strings.Fields(l)
@@ -222,8 +241,11 @@ func GetDevices() tea.Msg {
 				}
 			}
 			devices = append(devices, model.Device{Id: id, Name: name})
+			if selected != nil && selected.Id == id {
+				preSelected = selected
+			}
 		}
 	}
 
-	return getDevicesMsg{Devices: devices}
+	return getDevicesMsg{devices: devices, selected: preSelected}
 }

@@ -32,7 +32,9 @@ func InitMainModel() MainModel {
 }
 
 func (m MainModel) Init() tea.Cmd {
-	return devicesui.GetDevices
+	return func() tea.Msg {
+		return devicesui.GetDevices(nil)
+	}
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -73,10 +75,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logcatView = logcatui.New(m.viewportSize, msg.Device)
 		return m, m.logcatView.ConnectToLogcat
 
-	case logcatui.BackMsg:
+	case logcatui.GoToDevices:
 		m.logcatView.Close()
 		m.state = devicesView
-		return m, devicesui.GetDevices
+		return m, func() tea.Msg {
+			return devicesui.GetDevices(msg.Selected)
+		}
 	}
 
 	switch m.state {
