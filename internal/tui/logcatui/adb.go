@@ -5,13 +5,43 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const initialLogHistorySeconds = 180
+
+var firstConnectionTime *time.Time
+var once sync.Once
+
+func getFirstConnectionTime() *time.Time {
+	once.Do(func() {
+		t := time.Now()
+		firstConnectionTime = &t
+	})
+	return firstConnectionTime
+}
+
+func timeDiffInSeconds(start *time.Time, end *time.Time) int {
+	if start == nil || end == nil {
+		return -1
+	}
+	return int(end.Sub(*start).Seconds())
+}
+
 func (m LogcatModel) ConnectToLogcat() tea.Msg {
-	args := []string{"-s", m.device.Id, "logcat", "-T", "60"}
+	now := time.Now()
+	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
+	t := initialLogHistorySeconds
+	if diff > 180 {
+		t = diff
+	}
+
+	args := []string{"-s", m.device.Id, "logcat", "-T", strconv.Itoa(t)}
 
 	if m.filterMgmt.filter.packageName != "" {
 		pidStr, err := getPidByPackageName(m.device.Id, m.filterMgmt.filter.packageName)
