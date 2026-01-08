@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
@@ -14,7 +13,7 @@ import (
 
 type DeviceSelectionModel struct {
 	devices      []model.Device
-	table        table.Model
+	cursor       int
 	viewportSize model.Size
 	err          error
 }
@@ -32,47 +31,18 @@ type DeviceSelectedMsg struct {
 }
 
 func New() DeviceSelectionModel {
-	columns := []table.Column{
-		{Title: "ID", Width: 20},
-		{Title: "Model", Width: 30},
-	}
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithFocused(true),
-		table.WithHeight(10),
-	)
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(theme.FGBorder).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(theme.FGSelected).
-		Background(theme.BGCursor).
-		Bold(true)
-	t.SetStyles(s)
-
 	return DeviceSelectionModel{
-		table: t,
+		cursor: 0,
 	}
 }
 
 func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.viewportSize = model.Size{
 			Width:  msg.Width,
 			Height: msg.Height,
 		}
-
-		availableHeight := max(msg.Height-8, 5)
-		m.table.SetHeight(availableHeight)
-
 		return m, nil
 
 	case tea.KeyMsg:
@@ -80,14 +50,23 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 		case "r":
 			return m, GetDevices
 
+		case "j", "down":
+			if len(m.devices) > 0 && m.cursor < len(m.devices)-1 {
+				m.cursor++
+			}
+			return m, nil
+
+		case "k", "up":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+			return m, nil
+
 		case "enter":
-			if len(m.devices) > 0 {
-				selectedIdx := m.table.Cursor()
-				if selectedIdx < len(m.devices) {
-					selectedDevice := m.devices[selectedIdx]
-					return m, func() tea.Msg {
-						return DeviceSelectedMsg{Device: selectedDevice}
-					}
+			if len(m.devices) > 0 && m.cursor < len(m.devices) {
+				selectedDevice := m.devices[m.cursor]
+				return m, func() tea.Msg {
+					return DeviceSelectedMsg{Device: selectedDevice}
 				}
 			}
 			return m, nil
@@ -95,14 +74,7 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 
 	case getDevicesMsg:
 		m.devices = msg.Devices
-
-		rows := make([]table.Row, len(m.devices))
-		for i, device := range m.devices {
-			rows[i] = table.Row{device.Id, device.Name}
-		}
-		m.table.SetRows(rows)
-		m.table.SetCursor(0)
-
+		m.cursor = 0 // Reset cursor on refresh
 		return m, nil
 
 	case getDevicesErrorMsg:
@@ -110,37 +82,12 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 		return m, nil
 	}
 
-	m.table, cmd = m.table.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 func (m DeviceSelectionModel) View() string {
-	if m.err != nil {
-		errorMsg := fmt.Sprintf("Error: %s\n\nPress 'r' to retry", m.err.Error())
-		return m.centerContent(errorMsg)
-	}
-
-	if len(m.devices) == 0 {
-		emptyMsg := "No devices connected.\n\nPress 'r' to refresh"
-		return m.centerContent(emptyMsg)
-	}
-
-	var b strings.Builder
-
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle).
-		Render("Select a Device")
-
-	help := lipgloss.NewStyle().
-		Foreground(theme.FGHelp).
-		Render("↑/k up • ↓/j down • enter select • r refresh • ctrl+c quit")
-
-	b.WriteString(title + "\n\n")
-	b.WriteString(m.table.View())
-	b.WriteString("\n\n" + help)
-
-	return m.centerContent(b.String())
+	content := m.renderDevicePanelWithHelp()
+	return m.centerContent(content)
 }
 
 func (m DeviceSelectionModel) centerContent(content string) string {
@@ -155,6 +102,96 @@ func (m DeviceSelectionModel) centerContent(content string) string {
 		lipgloss.Center, // Vertical position
 		content,
 	)
+}
+
+func (m DeviceSelectionModel) renderRadioButton(label string, selected bool, cursor bool) string {
+	indicator := "( )"
+	if selected {
+		indicator = "(●)"
+	}
+
+	line := fmt.Sprintf("%s %s", indicator, label)
+
+	if cursor {
+		return lipgloss.NewStyle().
+			Background(theme.BGCursor).
+			Foreground(theme.FGSelected).
+			Bold(true).
+			Width(60).
+			Render(line)
+	}
+
+	return line
+}
+
+func (m DeviceSelectionModel) renderDevicePanel() string {
+	var b strings.Builder
+
+	panelTitle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.FGActiveTitle).
+		Render("Select a Device")
+
+	b.WriteString(panelTitle + "\n\n")
+
+	// Handle error state
+	if m.err != nil {
+		errorMsg := lipgloss.NewStyle().
+			Render(fmt.Sprintf("Error: %s", m.err.Error()))
+		b.WriteString(errorMsg + "\n\n")
+
+		hint := lipgloss.NewStyle().
+			Render("Press 'r' to retry")
+		b.WriteString(hint)
+	} else if len(m.devices) == 0 {
+		// Handle empty state
+		emptyMsg := lipgloss.NewStyle().
+			Render("No devices connected.")
+		b.WriteString(emptyMsg + "\n\n")
+
+		hint := lipgloss.NewStyle().
+			Render("Press 'r' to refresh")
+		b.WriteString(hint)
+	} else {
+		// Render device list
+		for i, device := range m.devices {
+			label := fmt.Sprintf("%s (%s)", device.Name, device.Id)
+
+			// Truncate if too long
+			maxLabelLen := 50
+			if len(label) > maxLabelLen {
+				label = label[:maxLabelLen-3] + "..."
+			}
+
+			line := m.renderRadioButton(label, false, i == m.cursor)
+			b.WriteString(line + "\n")
+		}
+	}
+
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.FGActiveBorder).
+		Padding(1, 2).
+		Width(m.viewportSize.Width/2 - 4)
+
+	return panelStyle.Render(b.String())
+}
+
+func (m DeviceSelectionModel) renderDevicePanelWithHelp() string {
+	var b strings.Builder
+
+	devicePanel := m.renderDevicePanel()
+	b.WriteString(devicePanel + "\n\n")
+
+	help := lipgloss.NewStyle().
+		Foreground(theme.FGHelp).
+		Width(m.viewportSize.Width/2 - 4).
+		AlignHorizontal(lipgloss.Center).
+		Render("↑/k up • ↓/j down • enter select • r refresh • ctrl+c quit")
+
+	b.WriteString(help)
+
+	return b.String()
 }
 
 func GetDevices() tea.Msg {
