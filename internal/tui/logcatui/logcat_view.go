@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
@@ -29,21 +28,13 @@ var (
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
-type logcatState int
-
-const (
-	logcatViewing logcatState = iota
-	filterManagement
-)
-
-type LogcatModel struct {
-	state         logcatState
-	viewportSize  model.Size
+type LogcatViewModel struct {
 	viewport      viewport.Model
 	cmd           *exec.Cmd
 	scanner       *bufio.Scanner
 	device        model.Device
-	filterMgmt    FilterManagementModel
+	filter        model.Filter
+	format        model.Format
 	log           []message
 	visualMode    bool
 	currentLine   int
@@ -76,18 +67,33 @@ type logcatConnectedMsg struct {
 	scanner *bufio.Scanner
 }
 
-type GoToDevices struct {
+type GoToDevicesMsg struct {
 	Selected *model.Device
 }
 
-func New(viewportSize model.Size, device model.Device) LogcatModel {
-	m := LogcatModel{
-		state:         logcatViewing,
-		viewportSize:  viewportSize,
+type GoToFilterMsg struct {
+	Device model.Device
+	Filter model.Filter
+	Format model.Format
+}
+
+type UpdateFiltersMsg struct {
+	Filter model.Filter
+	Format model.Format
+}
+
+func New(viewportSize model.Size, device model.Device) LogcatViewModel {
+	m := LogcatViewModel{
 		device:        device,
 		softWrap:      true,
 		startSelected: -1,
-		filterMgmt:    NewFilterManagementModel(viewportSize, device.Id),
+		filter: model.Filter{
+			Level: model.LvlV,
+		},
+		format: model.Format{
+			Brief: true,
+			Color: true,
+		},
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -98,7 +104,7 @@ func New(viewportSize model.Size, device model.Device) LogcatModel {
 	return m
 }
 
-func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
+func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
 		cmds []tea.Cmd
@@ -106,51 +112,47 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case model.Size:
-		m.viewportSize = msg
-		m.filterMgmt.viewportSize = msg
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
-		m.viewport.Width = m.viewportSize.Width
-		m.viewport.Height = m.viewportSize.Height - footerHeight - headerHeight
+		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height - footerHeight - headerHeight
 		m.Render()
 		return m, nil
-
-	case filterExitMsg:
-		if msg.changed {
-			saveConfigLocally(&m)
-		}
-		m.state = logcatViewing
-		m.Close()
-		return m, m.ConnectToLogcat
-	}
-
-	if m.state == filterManagement {
-		m.filterMgmt, cmd = m.filterMgmt.Update(msg)
-		return m, cmd
 	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-
 		switch msg.String() {
 		case "ctrl+r":
-			m.Close()
-			return m, m.ConnectToLogcat
+			Close(&m)
+			return m, func() tea.Msg {
+				return ConnectToLogcat(m)
+			}
 
 		case "ctrl+d":
 			return m, func() tea.Msg {
-				return GoToDevices{
+				return GoToDevicesMsg{
 					Selected: &m.device,
 				}
 			}
 
 		case "ctrl+f":
-			m.state = filterManagement
-			m.filterMgmt.EnterEditMode()
-			return m, nil
+			return m, func() tea.Msg {
+				return GoToFilterMsg{
+					Device: m.device,
+					Filter: m.filter,
+					Format: m.format,
+				}
+			}
 
 		case "alt+w":
-			m.softWrap = !m.softWrap
+			if !m.visualMode {
+				m.softWrap = !m.softWrap
+				return m, func() tea.Msg {
+					return ConnectToLogcat(m)
+				}
+			}
+			return m, nil
 
 		case "G":
 			m.viewport.GotoBottom()
@@ -158,9 +160,11 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 
 		case "alt+l":
 			if !m.visualMode {
-				m.filterMgmt.filter.level = nextPriority(m.filterMgmt.filter.level)
-				m.Close()
-				return m, m.ConnectToLogcat
+				m.filter.Level = m.filter.Level.Next()
+				Close(&m)
+				return m, func() tea.Msg {
+					return ConnectToLogcat(m)
+				}
 			}
 
 		case "v":
@@ -171,8 +175,10 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				m.Render()
 				return m, nil
 			}
-			m.Close()
-			return m, m.ConnectToLogcat
+			Close(&m)
+			return m, func() tea.Msg {
+				return ConnectToLogcat(m)
+			}
 
 		case "V":
 			if m.visualMode {
@@ -194,8 +200,10 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 				}
 				m.visualMode = false
 				m.startSelected = -1
-				m.Close()
-				return m, m.ConnectToLogcat
+				Close(&m)
+				return m, func() tea.Msg {
+					return ConnectToLogcat(m)
+				}
 			}
 
 		case "y":
@@ -239,7 +247,9 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 	case logcatConnectedMsg:
 		m.cmd = msg.cmd
 		m.scanner = msg.scanner
-		cmds = append(cmds, m.WaitForNextLine)
+		return m, func() tea.Msg {
+			return WaitForNextLine(m)
+		}
 
 	case logcatLineMsg:
 		if m.visualMode {
@@ -262,11 +272,21 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 			m.viewport.GotoBottom()
 		}
 
-		cmds = append(cmds, m.WaitForNextLine)
+		return m, func() tea.Msg {
+			return WaitForNextLine(m)
+		}
 
 	case logcatErrorMsg:
 		m.err = msg.Err
 		return m, nil
+
+	case UpdateFiltersMsg:
+		m.filter = msg.Filter
+		m.format = msg.Format
+		Close(&m)
+		return m, func() tea.Msg {
+			return ConnectToLogcat(m)
+		}
 	}
 
 	if !m.visualMode {
@@ -277,7 +297,7 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *LogcatModel) Render() {
+func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	for i, msg := range m.log {
 		if m.visualMode {
@@ -302,7 +322,7 @@ func (m *LogcatModel) Render() {
 				continue
 			}
 		}
-		if m.filterMgmt.format.color {
+		if m.format.Color {
 			line := strings.TrimSuffix(msg.text, "\n")
 			styled := lipgloss.NewStyle().
 				Foreground(theme.GetLogColor(util.GetLogLevel(line))).
@@ -320,7 +340,7 @@ func (m *LogcatModel) Render() {
 	m.viewport.SetContent(wrapped)
 }
 
-func (m *LogcatModel) ensureLineVisible() {
+func (m *LogcatViewModel) ensureLineVisible() {
 	if !m.visualMode || m.currentLine < 0 || m.currentLine >= len(m.log) {
 		return
 	}
@@ -345,41 +365,35 @@ func (m *LogcatModel) ensureLineVisible() {
 	}
 }
 
-func (m LogcatModel) View() string {
+func (m LogcatViewModel) View() string {
 	if m.err != nil {
+		slog.Error("Logcat view error", "error", m.err)
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
 
-	switch m.state {
-	case logcatViewing:
-		return fmt.Sprintf(
-			"%s\n%s\n%s",
-			m.headerView(),
-			m.viewport.View(),
-			m.footerView(),
-		)
-	case filterManagement:
-		return m.filterMgmt.View()
-	}
-
-	return ""
+	return fmt.Sprintf(
+		"%s\n%s\n%s",
+		m.headerView(),
+		m.viewport.View(),
+		m.footerView(),
+	)
 }
 
-func (m LogcatModel) headerView() string {
+func (m LogcatViewModel) headerView() string {
 	var filters []string
-	if !m.filterMgmt.filter.isEmpty() {
+	if !m.filter.IsEmpty() {
 		filters = append(filters, " | Filters:")
-		if m.filterMgmt.filter.packageName != "" {
-			filters = append(filters, fmt.Sprintf("[pkg:%s]", m.filterMgmt.filter.packageName))
+		if m.filter.PackageName != "" {
+			filters = append(filters, fmt.Sprintf("[pkg:%s]", m.filter.PackageName))
 		}
-		if m.filterMgmt.filter.level != "" && m.filterMgmt.filter.level != priorityVerbose {
-			filters = append(filters, fmt.Sprintf("[level:%s]", m.filterMgmt.filter.level))
+		if m.filter.Level != "" && m.filter.Level != model.LvlV {
+			filters = append(filters, fmt.Sprintf("[level:%s]", m.filter.Level))
 		}
-		if m.filterMgmt.filter.tag != "" {
-			filters = append(filters, fmt.Sprintf("[tag:%s]", m.filterMgmt.filter.tag))
+		if m.filter.Tag != "" {
+			filters = append(filters, fmt.Sprintf("[tag:%s]", m.filter.Tag))
 		}
-		if m.filterMgmt.filter.text != "" {
-			filters = append(filters, fmt.Sprintf("[text:%s]", m.filterMgmt.filter.text))
+		if m.filter.Text != "" {
+			filters = append(filters, fmt.Sprintf("[text:%s]", m.filter.Text))
 		}
 	}
 
@@ -387,53 +401,53 @@ func (m LogcatModel) headerView() string {
 	var formatsStr string
 
 	// Add single-choice format (only one should be true)
-	if m.filterMgmt.format.brief {
+	if m.format.Brief {
 		formats = append(formats, "brief")
-	} else if m.filterMgmt.format.long {
+	} else if m.format.Long {
 		formats = append(formats, "long")
-	} else if m.filterMgmt.format.process {
+	} else if m.format.Process {
 		formats = append(formats, "process")
-	} else if m.filterMgmt.format.raw {
+	} else if m.format.Raw {
 		formats = append(formats, "raw")
-	} else if m.filterMgmt.format.tag {
+	} else if m.format.Tag {
 		formats = append(formats, "tag")
-	} else if m.filterMgmt.format.thread {
+	} else if m.format.Thread {
 		formats = append(formats, "thread")
-	} else if m.filterMgmt.format.threadtime {
+	} else if m.format.Threadtime {
 		formats = append(formats, "threadtime")
-	} else if m.filterMgmt.format.time {
+	} else if m.format.Time {
 		formats = append(formats, "time")
 	}
 
 	// Add multi-choice modifiers
-	if m.filterMgmt.format.color {
+	if m.format.Color {
 		formats = append(formats, "color")
 	}
-	if m.filterMgmt.format.descriptive {
+	if m.format.Descriptive {
 		formats = append(formats, "descriptive")
 	}
-	if m.filterMgmt.format.epoch {
+	if m.format.Epoch {
 		formats = append(formats, "epoch")
 	}
-	if m.filterMgmt.format.monotonic {
+	if m.format.Monotonic {
 		formats = append(formats, "monotonic")
 	}
-	if m.filterMgmt.format.printable {
+	if m.format.Printable {
 		formats = append(formats, "printable")
 	}
-	if m.filterMgmt.format.uid {
+	if m.format.Uid {
 		formats = append(formats, "uid")
 	}
-	if m.filterMgmt.format.usec {
+	if m.format.Usec {
 		formats = append(formats, "usec")
 	}
-	if m.filterMgmt.format.UTC {
+	if m.format.UTC {
 		formats = append(formats, "UTC")
 	}
-	if m.filterMgmt.format.year {
+	if m.format.Year {
 		formats = append(formats, "year")
 	}
-	if m.filterMgmt.format.zone {
+	if m.format.Zone {
 		formats = append(formats, "zone")
 	}
 
@@ -446,7 +460,7 @@ func (m LogcatModel) headerView() string {
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
 
-func (m LogcatModel) footerView() string {
+func (m LogcatViewModel) footerView() string {
 	var helpText string
 	if m.visualMode {
 		helpText = helpTextVisual
@@ -459,84 +473,4 @@ func (m LogcatModel) footerView() string {
 		Render(helpText)
 
 	return help
-}
-
-func saveConfigLocally(m *LogcatModel) {
-	go func() {
-		c := config.Config{
-			Prefs: config.Prefs{
-				Format:    getFormatName(m.filterMgmt.format),
-				Modifiers: getModifiers(m.filterMgmt.format),
-			},
-			Session: config.Session{
-				DeviceID: m.device.Id,
-				Pkg:      m.filterMgmt.filter.packageName,
-				Tag:      m.filterMgmt.filter.tag,
-				Txt:      m.filterMgmt.filter.text,
-			},
-		}
-
-		_, err := config.Save(&c)
-		if err != nil {
-			slog.Error("Failed to save config", "error", err)
-		}
-	}()
-}
-
-func getFormatName(f format) string {
-	switch {
-	case f.brief:
-		return "brief"
-	case f.long:
-		return "long"
-	case f.process:
-		return "process"
-	case f.raw:
-		return "raw"
-	case f.tag:
-		return "tag"
-	case f.thread:
-		return "thread"
-	case f.threadtime:
-		return "threadtime"
-	case f.time:
-		return "time"
-	default:
-		return ""
-	}
-}
-
-func getModifiers(f format) []string {
-	var mods []string
-	if f.color {
-		mods = append(mods, "color")
-	}
-	if f.descriptive {
-		mods = append(mods, "descriptive")
-	}
-	if f.epoch {
-		mods = append(mods, "epoch")
-	}
-	if f.monotonic {
-		mods = append(mods, "monotonic")
-	}
-	if f.printable {
-		mods = append(mods, "printable")
-	}
-	if f.uid {
-		mods = append(mods, "uid")
-	}
-	if f.usec {
-		mods = append(mods, "usec")
-	}
-	if f.UTC {
-		mods = append(mods, "UTC")
-	}
-	if f.year {
-		mods = append(mods, "year")
-	}
-	if f.zone {
-		mods = append(mods, "zone")
-	}
-	return mods
 }

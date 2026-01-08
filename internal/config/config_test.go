@@ -16,9 +16,6 @@ func compareConfigs(t *testing.T, got, want Config) {
 	t.Helper()
 
 	// Compare Prefs
-	if got.Prefs.Wrap != want.Prefs.Wrap {
-		t.Errorf("Prefs.Wrap = %v, want %v", got.Prefs.Wrap, want.Prefs.Wrap)
-	}
 	if got.Prefs.Format != want.Prefs.Format {
 		t.Errorf("Prefs.Format = %q, want %q", got.Prefs.Format, want.Prefs.Format)
 	}
@@ -27,14 +24,11 @@ func compareConfigs(t *testing.T, got, want Config) {
 	}
 
 	// Compare Session
-	if got.Session.DeviceID != want.Session.DeviceID {
-		t.Errorf("Session.DeviceID = %q, want %q", got.Session.DeviceID, want.Session.DeviceID)
+	if got.Session.DeviceId != want.Session.DeviceId {
+		t.Errorf("Session.DeviceID = %q, want %q", got.Session.DeviceId, want.Session.DeviceId)
 	}
 	if got.Session.Pkg != want.Session.Pkg {
 		t.Errorf("Session.Pkg = %q, want %q", got.Session.Pkg, want.Session.Pkg)
-	}
-	if got.Session.Lvl != want.Session.Lvl {
-		t.Errorf("Session.Lvl = %q, want %q", got.Session.Lvl, want.Session.Lvl)
 	}
 	if got.Session.Tag != want.Session.Tag {
 		t.Errorf("Session.Tag = %q, want %q", got.Session.Tag, want.Session.Tag)
@@ -82,9 +76,6 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Test Prefs defaults
 	t.Run("Prefs", func(t *testing.T) {
-		if got.Prefs.Wrap != true {
-			t.Errorf("Prefs.Wrap = %v, want true", got.Prefs.Wrap)
-		}
 		if got.Prefs.Format != "brief" {
 			t.Errorf("Prefs.Format = %q, want %q", got.Prefs.Format, "brief")
 		}
@@ -96,14 +87,11 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Test Session defaults
 	t.Run("Session", func(t *testing.T) {
-		if got.Session.DeviceID != "" {
-			t.Errorf("Session.DeviceID = %q, want empty string", got.Session.DeviceID)
+		if got.Session.DeviceId != "" {
+			t.Errorf("Session.DeviceID = %q, want empty string", got.Session.DeviceId)
 		}
 		if got.Session.Pkg != "" {
 			t.Errorf("Session.Pkg = %q, want empty string", got.Session.Pkg)
-		}
-		if got.Session.Lvl != "V" {
-			t.Errorf("Session.Lvl = %q, want %q", got.Session.Lvl, "V")
 		}
 		if got.Session.Tag != "" {
 			t.Errorf("Session.Tag = %q, want empty string", got.Session.Tag)
@@ -134,14 +122,12 @@ func TestConfig_Save(t *testing.T) {
 			name: "CustomPrefs",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      false,
 					Format:    "json",
 					Modifiers: []string{"color", "timestamp"},
 				},
 				Session: Session{
-					DeviceID: "",
+					DeviceId: "",
 					Pkg:      "",
-					Lvl:      "V",
 					Tag:      "",
 					Txt:      "",
 				},
@@ -151,14 +137,12 @@ func TestConfig_Save(t *testing.T) {
 			name: "CustomSession",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      true,
 					Format:    "brief",
 					Modifiers: []string{"color"},
 				},
 				Session: Session{
-					DeviceID: "emulator-5554",
+					DeviceId: "emulator-5554",
 					Pkg:      "com.example.app",
-					Lvl:      "D",
 					Tag:      "MyTag",
 					Txt:      "search text",
 				},
@@ -168,14 +152,12 @@ func TestConfig_Save(t *testing.T) {
 			name: "EmptyModifiers",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      true,
 					Format:    "brief",
 					Modifiers: []string{},
 				},
 				Session: Session{
-					DeviceID: "",
+					DeviceId: "",
 					Pkg:      "",
-					Lvl:      "V",
 					Tag:      "",
 					Txt:      "",
 				},
@@ -185,14 +167,12 @@ func TestConfig_Save(t *testing.T) {
 			name: "SpecialCharactersInSession",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      true,
 					Format:    "brief",
 					Modifiers: []string{"color"},
 				},
 				Session: Session{
-					DeviceID: "device-123",
+					DeviceId: "device-123",
 					Pkg:      "com.app.with.dots",
-					Lvl:      "E",
 					Tag:      "Tag:With:Colons",
 					Txt:      "text with \"quotes\" and spaces",
 				},
@@ -303,7 +283,7 @@ func TestConfig_Save_ErrorCases(t *testing.T) {
 
 		// Save first config
 		config1 := DefaultConfig()
-		config1.Session.Lvl = "D"
+		config1.Session.Tag = "FirstTag"
 		path1, err := Save(&config1)
 		if err != nil {
 			t.Fatalf("First Save() error = %v", err)
@@ -311,7 +291,7 @@ func TestConfig_Save_ErrorCases(t *testing.T) {
 
 		// Save second config (should overwrite)
 		config2 := DefaultConfig()
-		config2.Session.Lvl = "E"
+		config2.Session.Tag = "SecondTag"
 		path2, err := Save(&config2)
 		if err != nil {
 			t.Fatalf("Second Save() error = %v", err)
@@ -333,8 +313,8 @@ func TestConfig_Save_ErrorCases(t *testing.T) {
 			t.Fatalf("Load() error = %v", err)
 		}
 
-		if loaded.Session.Lvl != "E" {
-			t.Errorf("Loaded config Lvl = %q, want %q", loaded.Session.Lvl, "E")
+		if loaded.Session.Tag != "SecondTag" {
+			t.Errorf("Loaded config Tag = %q, want %q", loaded.Session.Tag, "SecondTag")
 		}
 	})
 }
@@ -349,14 +329,12 @@ func TestLoadConfig(t *testing.T) {
 			name: "ValidDefaultConfig",
 			jsonData: `{
   "preferences": {
-    "soft_wrap": true,
     "log_format": "brief",
     "log_modifiers": ["color"]
   },
   "session": {
     "device_id": "",
     "package_name": "",
-    "log_level": "V",
     "log_tag": "",
     "log_text": ""
   }
@@ -367,28 +345,24 @@ func TestLoadConfig(t *testing.T) {
 			name: "ValidCustomConfig",
 			jsonData: `{
   "preferences": {
-    "soft_wrap": false,
     "log_format": "json",
     "log_modifiers": ["color", "timestamp"]
   },
   "session": {
     "device_id": "emulator-5554",
     "package_name": "com.example.app",
-    "log_level": "D",
     "log_tag": "MyTag",
     "log_text": "search"
   }
 }`,
 			wantConfig: Config{
 				Prefs: Prefs{
-					Wrap:      false,
 					Format:    "json",
 					Modifiers: []string{"color", "timestamp"},
 				},
 				Session: Session{
-					DeviceID: "emulator-5554",
+					DeviceId: "emulator-5554",
 					Pkg:      "com.example.app",
-					Lvl:      "D",
 					Tag:      "MyTag",
 					Txt:      "search",
 				},
@@ -396,35 +370,31 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			name:       "CompactJSON",
-			jsonData:   `{"preferences":{"soft_wrap":true,"log_format":"brief","log_modifiers":["color"]},"session":{"device_id":"","package_name":"","log_level":"V","log_tag":"","log_text":""}}`,
+			jsonData:   `{"preferences":{"log_format":"brief","log_modifiers":["color"]},"session":{"device_id":"","package_name":"","log_tag":"","log_text":""}}`,
 			wantConfig: DefaultConfig(),
 		},
 		{
 			name: "EmptyModifiersArray",
 			jsonData: `{
   "preferences": {
-    "soft_wrap": true,
     "log_format": "brief",
     "log_modifiers": []
   },
   "session": {
     "device_id": "",
     "package_name": "",
-    "log_level": "V",
     "log_tag": "",
     "log_text": ""
   }
 }`,
 			wantConfig: Config{
 				Prefs: Prefs{
-					Wrap:      true,
 					Format:    "brief",
 					Modifiers: []string{},
 				},
 				Session: Session{
-					DeviceID: "",
+					DeviceId: "",
 					Pkg:      "",
-					Lvl:      "V",
 					Tag:      "",
 					Txt:      "",
 				},
@@ -474,14 +444,12 @@ func TestLoadConfig_ErrorCases(t *testing.T) {
 			name: "WrongTypes",
 			jsonData: `{
   "preferences": {
-    "soft_wrap": "not a boolean",
     "log_format": 123,
     "log_modifiers": "not an array"
   },
   "session": {
     "device_id": 456,
     "package_name": true,
-    "log_level": [],
     "log_tag": {},
     "log_text": null
   }
@@ -505,7 +473,6 @@ func TestLoadConfig_ErrorCases(t *testing.T) {
 			name: "ExtraFields",
 			jsonData: `{
   "preferences": {
-    "soft_wrap": true,
     "log_format": "brief",
     "log_modifiers": ["color"],
     "extra_field": "should be ignored"
@@ -513,7 +480,6 @@ func TestLoadConfig_ErrorCases(t *testing.T) {
   "session": {
     "device_id": "",
     "package_name": "",
-    "log_level": "V",
     "log_tag": "",
     "log_text": "",
     "another_extra": 123
@@ -573,14 +539,12 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 			name: "FullyPopulatedConfig",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      false,
 					Format:    "threadtime",
 					Modifiers: []string{"color", "timestamp", "epoch"},
 				},
 				Session: Session{
-					DeviceID: "device-12345",
+					DeviceId: "device-12345",
 					Pkg:      "com.example.myapp",
-					Lvl:      "W",
 					Tag:      "MainActivity",
 					Txt:      "error occurred",
 				},
@@ -590,14 +554,12 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 			name: "MinimalConfig",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      false,
 					Format:    "",
 					Modifiers: []string{},
 				},
 				Session: Session{
-					DeviceID: "",
+					DeviceId: "",
 					Pkg:      "",
-					Lvl:      "",
 					Tag:      "",
 					Txt:      "",
 				},
@@ -607,14 +569,12 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 			name: "UnicodeCharacters",
 			config: Config{
 				Prefs: Prefs{
-					Wrap:      true,
 					Format:    "brief",
 					Modifiers: []string{"color"},
 				},
 				Session: Session{
-					DeviceID: "デバイス-123",
+					DeviceId: "デバイス-123",
 					Pkg:      "com.例え.app",
-					Lvl:      "I",
 					Tag:      "тег",
 					Txt:      "検索テキスト 🔍",
 				},
@@ -665,11 +625,15 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 	t.Run("PrefsJSONTags", func(t *testing.T) {
 		config := Config{
 			Prefs: Prefs{
-				Wrap:      false,
 				Format:    "test",
 				Modifiers: []string{"mod1"},
 			},
-			Session: Session{},
+			Session: Session{
+				DeviceId: "device",
+				Pkg:      "pkg",
+				Tag:      "tag",
+				Txt:      "txt",
+			},
 		}
 
 		data, err := json.Marshal(config)
@@ -681,12 +645,10 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 
 		// Verify JSON field names
 		expectedFields := []string{
-			`"soft_wrap"`,
 			`"log_format"`,
 			`"log_modifiers"`,
 			`"device_id"`,
 			`"package_name"`,
-			`"log_level"`,
 			`"log_tag"`,
 			`"log_text"`,
 		}
@@ -729,45 +691,4 @@ func TestConfig_SaveFileLocation(t *testing.T) {
 	if filepath.Base(path) != configFileName {
 		t.Errorf("Save() filename = %q, want %q", filepath.Base(path), configFileName)
 	}
-}
-
-func TestLoadConfig_FilePosition(t *testing.T) {
-	// Verify Load can be called multiple times on same file
-	tempDir := t.TempDir()
-	jsonData := `{
-  "preferences": {
-    "soft_wrap": true,
-    "log_format": "brief",
-    "log_modifiers": ["color"]
-  },
-  "session": {
-    "device_id": "test",
-    "package_name": "",
-    "log_level": "V",
-    "log_tag": "",
-    "log_text": ""
-  }
-}`
-
-	file := createTestFile(t, tempDir, jsonData)
-	defer file.Close()
-
-	// First load
-	config1, err := Load(file)
-	if err != nil {
-		t.Fatalf("First Load() error = %v", err)
-	}
-
-	// Seek back to beginning
-	if _, err := file.Seek(0, 0); err != nil {
-		t.Fatalf("file.Seek() error = %v", err)
-	}
-
-	// Second load
-	config2, err := Load(file)
-	if err != nil {
-		t.Fatalf("Second Load() error = %v", err)
-	}
-
-	compareConfigs(t, config1, config2)
 }

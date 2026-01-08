@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/devicesui"
+	"github.com/parfenovvs/lazylogcat/internal/tui/filterui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 )
 
@@ -15,13 +16,15 @@ type sessionState int
 const (
 	devicesView sessionState = iota
 	logcatView
+	filterView
 )
 
 type MainModel struct {
 	viewportSize model.Size
 	state        sessionState
-	devicesView  devicesui.DeviceSelectionModel
-	logcatView   logcatui.LogcatModel
+	devicesView  devicesui.DevicesViewModel
+	logcatView   logcatui.LogcatViewModel
+	filterView   filterui.FilterViewModel
 }
 
 func InitMainModel() MainModel {
@@ -38,45 +41,71 @@ func (m MainModel) Init() tea.Cmd {
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	var cmds []tea.Cmd
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			logcatui.Close(&m.logcatView)
+			return m, tea.Quit
+		}
+
 	case tea.WindowSizeMsg:
 		m.viewportSize = model.Size{
 			Width:  msg.Width,
 			Height: msg.Height,
 		}
-		// Forward resize with allocated viewport size to child views
+		resizeMsg := m.viewportSize
 		switch m.state {
 		case logcatView:
-			resizeMsg := model.Size{
-				Width:  m.viewportSize.Width,
-				Height: m.viewportSize.Height,
-			}
 			newLogcatViewing, newCmd := m.logcatView.Update(resizeMsg)
 			m.logcatView = newLogcatViewing
 			return m, newCmd
+		case filterView:
+			newFilterView, newCmd := m.filterView.Update(resizeMsg)
+			m.filterView = newFilterView
+			return m, newCmd
 		case devicesView:
-			// Forward resize to DevicesView for centering
-			newDevicesView, newCmd := m.devicesView.Update(msg)
+			newDevicesView, newCmd := m.devicesView.Update(resizeMsg)
 			m.devicesView = newDevicesView
 			return m, newCmd
 		}
 		return m, nil
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			m.logcatView.Close()
-			return m, tea.Quit
-		}
+
 	case devicesui.DeviceSelectedMsg:
 		m.state = logcatView
 		m.logcatView = logcatui.New(m.viewportSize, msg.Device)
-		return m, m.logcatView.ConnectToLogcat
+		return m, func() tea.Msg {
+			return logcatui.ConnectToLogcat(m.logcatView)
+		}
 
-	case logcatui.GoToDevices:
-		m.logcatView.Close()
+	case logcatui.GoToFilterMsg:
+		m.state = filterView
+		m.filterView = filterui.New(
+			m.viewportSize,
+			msg.Device.Id,
+			msg.Filter,
+			msg.Format,
+		)
+		return m, nil
+
+	case filterui.FilterExitMsg:
+		if m.state == filterView {
+			m.state = logcatView
+			return m, func() tea.Msg {
+				return logcatui.UpdateFiltersMsg{
+					Filter: msg.Filter,
+					Format: msg.Format,
+				}
+			}
+		}
+
+	case logcatui.GoToDevicesMsg:
+		logcatui.Close(&m.logcatView)
 		m.state = devicesView
 		return m, func() tea.Msg {
 			return devicesui.GetDevices(msg.Selected)
@@ -92,6 +121,11 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logcatView:
 		newLogcatViewing, newCmd := m.logcatView.Update(msg)
 		m.logcatView = newLogcatViewing
+		cmd = newCmd
+
+	case filterView:
+		newFilterView, newCmd := m.filterView.Update(msg)
+		m.filterView = newFilterView
 		cmd = newCmd
 	}
 
@@ -111,6 +145,8 @@ func (m MainModel) View() string {
 		content = m.devicesView.View()
 	case logcatView:
 		content = m.logcatView.View()
+	case filterView:
+		content = m.filterView.View()
 	}
 
 	return style.Render(content)

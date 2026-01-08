@@ -1,4 +1,4 @@
-package logcatui
+package filterui
 
 import (
 	"fmt"
@@ -8,180 +8,101 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
+	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
-type filterExitMsg struct {
-	changed bool
+type FilterExitMsg struct {
+	Changed bool
+	Filter  model.Filter
+	Format  model.Format
 }
-
-type filter struct {
-	packageName string
-	level       priority
-	tag         string
-	text        string
-}
-
-type format struct {
-	//Single choice
-	brief      bool
-	long       bool
-	process    bool
-	raw        bool
-	tag        bool
-	thread     bool
-	threadtime bool
-	time       bool
-
-	//Multiple choice (conflicts are silently ignored)
-	color       bool //Shows each priority level with a different color.
-	descriptive bool //Shows log buffer event descriptions. This modifier affects event log buffer messages only and has no effect on the other non-binary buffers. The event descriptions come from the event-log-tags database.
-	epoch       bool //Displays time in seconds starting from Jan 1, 1970.
-	monotonic   bool //Displays time in CPU seconds starting from the last boot.
-	printable   bool //Ensures that any binary logging content is escaped.
-	uid         bool //If permitted by access controls, displays the UID or Android ID of the logged process.
-	usec        bool //Displays the time, with precision in microseconds.
-	UTC         bool //Displays the time as UTC.
-	year        bool //Adds the year to the displayed time.
-	zone        bool //Adds the local time zone to the displayed time.
-}
-
-type priority string
-
-const (
-	priorityVerbose priority = "V"
-	priorityDebug   priority = "D"
-	priorityInfo    priority = "I"
-	priorityWarn    priority = "W"
-	priorityError   priority = "E"
-	priorityFatal   priority = "F"
-)
 
 const priorities = "VDIWEF"
 
-type FilterManagementModel struct {
+type FilterViewModel struct {
 	viewportSize model.Size
-	deviceId     string // Current device ID
-	filter       filter // Current active filter state
-	format       format // Current active format state
+	packageInput textinput.Model
+	tagInput     textinput.Model
+	textInput    textinput.Model
 
-	// UI state (only used when in filter management mode)
-	isEditing      bool            // true when in filter management UI
-	activePanel    int             // 0=format, 1=modifier, 2=package
-	formatCursor   int             // 0-7
-	modifierCursor int             // 0-9
-	packageInput   textinput.Model // Package filter input
-	tagInput       textinput.Model // Tag filter input
-	textInput      textinput.Model // Text filter input
-	tempFilter     filter          // Working copy during editing
-	tempFormat     format          // Working copy during editing
-	validationErr  string          // Validation error message
+	deviceId   string
+	filter     model.Filter
+	format     model.Format
+	tempFilter model.Filter
+	tempFormat model.Format
+
+	activePanel    int
+	formatCursor   int
+	modifierCursor int
+	validationErr  string
 }
 
-func NewFilterManagementModel(viewportSize model.Size, deviceId string) FilterManagementModel {
+func New(viewportSize model.Size, deviceId string, filter model.Filter, format model.Format) FilterViewModel {
 	pi := textinput.New()
 	pi.Placeholder = "Enter package name..."
 	pi.CharLimit = 100
 	pi.Width = viewportSize.Width - 20
+	pi.SetValue(filter.PackageName)
+	pi.Blur()
 
-	ti := textinput.New()
-	ti.Placeholder = "Enter tag value..."
-	ti.CharLimit = 100
-	ti.Width = viewportSize.Width - 20
+	tagInput := textinput.New()
+	tagInput.Placeholder = "Enter tag value..."
+	tagInput.CharLimit = 100
+	tagInput.Width = viewportSize.Width - 20
+	tagInput.SetValue(filter.Tag)
+	tagInput.Blur()
 
 	txtInput := textinput.New()
 	txtInput.Placeholder = "Enter text to search..."
 	txtInput.CharLimit = 100
 	txtInput.Width = viewportSize.Width - 20
+	txtInput.SetValue(filter.Text)
+	txtInput.Blur()
 
-	return FilterManagementModel{
-		viewportSize: viewportSize,
-		deviceId:     deviceId,
-		filter: filter{
-			level: priorityVerbose,
-		},
-		format: format{
-			brief: true,
-			color: true,
-		},
+	return FilterViewModel{
+		viewportSize:   viewportSize,
+		deviceId:       deviceId,
+		filter:         filter,
+		format:         format,
+		tempFilter:     filter,
+		tempFormat:     format,
 		packageInput:   pi,
-		tagInput:       ti,
+		tagInput:       tagInput,
 		textInput:      txtInput,
-		isEditing:      false,
 		activePanel:    0,
-		formatCursor:   0,
+		formatCursor:   getCurrentFormatIndex(&format),
 		modifierCursor: 0,
 	}
 }
 
-func (f *filter) isEmpty() bool {
-	return f.packageName == "" &&
-		(f.level == "" || f.level == priorityVerbose) &&
-		f.tag == "" &&
-		f.text == ""
-}
-
-func nextPriority(p priority) priority {
-	if p == "" || p == priorityFatal {
-		return priorityVerbose
-	}
-
-	i := strings.Index(priorities, string(p))
-	if i == -1 {
-		return priorityVerbose
-	}
-	return priority(priorities[i+1])
-}
-
-func (m *FilterManagementModel) EnterEditMode() {
-	m.isEditing = true
-	m.activePanel = 0
-	m.formatCursor = getCurrentFormatIndex(m.format)
-	m.modifierCursor = 0
-	m.tempFilter = m.filter
-	m.tempFormat = m.format
-
-	m.packageInput.SetValue(m.filter.packageName)
-	m.packageInput.Blur()
-
-	m.tagInput.SetValue(m.filter.tag)
-	m.tagInput.Blur()
-
-	m.textInput.SetValue(m.filter.text)
-	m.textInput.Blur()
-}
-
-func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
+func (m *FilterViewModel) Exit(apply bool) (bool, error) {
 	if apply {
 		newPackage := strings.TrimSpace(m.packageInput.Value())
 
-		if newPackage != m.filter.packageName {
+		if newPackage != m.filter.PackageName {
 			if newPackage != "" {
-				_, err := getPidByPackageName(m.deviceId, newPackage)
+				_, err := util.GetPidByPackageName(m.deviceId, newPackage)
 				if err != nil {
 					m.validationErr = "Package not found."
-					m.isEditing = true
 					return false, err
 				}
 			}
 
-			m.tempFilter.packageName = newPackage
+			m.tempFilter.PackageName = newPackage
 		}
 
-		m.tempFilter.tag = strings.TrimSpace(m.tagInput.Value())
-		m.tempFilter.text = strings.TrimSpace(m.textInput.Value())
+		m.tempFilter.Tag = strings.TrimSpace(m.tagInput.Value())
+		m.tempFilter.Text = strings.TrimSpace(m.textInput.Value())
 
-		filterChanged := m.filter.packageName != m.tempFilter.packageName ||
-			m.filter.level != m.tempFilter.level ||
-			m.filter.tag != m.tempFilter.tag ||
-			m.filter.text != m.tempFilter.text
+		filterChanged := m.filter != m.tempFilter
 		formatChanged := m.format != m.tempFormat
 
 		m.filter = m.tempFilter
 		m.format = m.tempFormat
 
-		m.isEditing = false
 		if m.packageInput.Focused() {
 			m.packageInput.Blur()
 		}
@@ -192,14 +113,17 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 			m.textInput.Blur()
 		}
 
+		if filterChanged || formatChanged {
+			saveConfigLocally(m.deviceId, m.filter, m.format)
+		}
+
 		return filterChanged || formatChanged, nil
 	}
 
 	m.validationErr = ""
-	m.packageInput.SetValue(m.filter.packageName)
-	m.tagInput.SetValue(m.filter.tag)
-	m.textInput.SetValue(m.filter.text)
-	m.isEditing = false
+	m.packageInput.SetValue(m.filter.PackageName)
+	m.tagInput.SetValue(m.filter.Tag)
+	m.textInput.SetValue(m.filter.Text)
 	if m.packageInput.Focused() {
 		m.packageInput.Blur()
 	}
@@ -212,18 +136,15 @@ func (m *FilterManagementModel) ExitEditMode(apply bool) (bool, error) {
 	return false, nil
 }
 
-func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.Cmd) {
+func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case model.Size:
 		m.viewportSize = msg
 		m.packageInput.Width = msg.Width - 20
 		m.tagInput.Width = msg.Width - 20
 		m.textInput.Width = msg.Width - 20
-	case tea.KeyMsg:
-		if !m.isEditing {
-			return m, nil
-		}
 
+	case tea.KeyMsg:
 		if m.activePanel == 0 || m.activePanel == 1 {
 			switch msg.String() {
 			case "j", "down":
@@ -261,19 +182,27 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 
 		switch msg.String() {
 		case "ctrl+s":
-			changed, err := m.ExitEditMode(true)
+			changed, err := m.Exit(true)
 			if err != nil {
-				slog.Error("error exiting filter edit mode", "err", err)
+				slog.Error("Error saving filter", "err", err)
 				return m, nil
 			}
 			return m, func() tea.Msg {
-				return filterExitMsg{changed: changed}
+				return FilterExitMsg{
+					Changed: changed,
+					Filter:  m.filter,
+					Format:  m.format,
+				}
 			}
 
 		case "esc":
-			m.ExitEditMode(false)
+			m.Exit(false)
 			return m, func() tea.Msg {
-				return filterExitMsg{changed: false}
+				return FilterExitMsg{
+					Changed: false,
+					Filter:  m.filter,
+					Format:  m.format,
+				}
 			}
 		case "tab", "shift+tab":
 			switch m.activePanel {
@@ -325,11 +254,7 @@ func (m FilterManagementModel) Update(msg tea.Msg) (FilterManagementModel, tea.C
 	return m, nil
 }
 
-func (m FilterManagementModel) View() string {
-	if !m.isEditing {
-		return "" // Not in editing mode
-	}
-
+func (m FilterViewModel) View() string {
 	var b strings.Builder
 
 	// Title
@@ -374,7 +299,7 @@ func (m FilterManagementModel) View() string {
 	)
 }
 
-func (m FilterManagementModel) renderFormatPanel(height int) string {
+func (m FilterViewModel) renderFormatPanel(height int) string {
 	var b strings.Builder
 
 	// Panel title
@@ -405,7 +330,7 @@ func (m FilterManagementModel) renderFormatPanel(height int) string {
 	}
 
 	for i, fmt := range formats {
-		selected := isFormatSelected(m.tempFormat, fmt.field)
+		selected := isFormatSelected(&m.tempFormat, fmt.field)
 		cursor := m.activePanel == 0 && m.formatCursor == i
 
 		line := m.renderRadioButton(fmt.name, selected, cursor)
@@ -428,7 +353,7 @@ func (m FilterManagementModel) renderFormatPanel(height int) string {
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterManagementModel) renderModifierPanel() (string, int) {
+func (m FilterViewModel) renderModifierPanel() (string, int) {
 	var b strings.Builder
 
 	// Panel title
@@ -460,7 +385,7 @@ func (m FilterManagementModel) renderModifierPanel() (string, int) {
 	}
 
 	for i, mod := range modifiers {
-		selected := isModifierSelected(m.tempFormat, mod.field)
+		selected := isModifierSelected(&m.tempFormat, mod.field)
 		cursor := m.activePanel == 1 && m.modifierCursor == i
 
 		line := m.renderCheckbox(mod.name, selected, cursor)
@@ -482,7 +407,7 @@ func (m FilterManagementModel) renderModifierPanel() (string, int) {
 	return panelStyle.Render(result), lipgloss.Height(result) + 2
 }
 
-func (m FilterManagementModel) renderPackagePanel() string {
+func (m FilterViewModel) renderPackagePanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -516,7 +441,7 @@ func (m FilterManagementModel) renderPackagePanel() string {
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterManagementModel) renderTagPanel() string {
+func (m FilterViewModel) renderTagPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -544,7 +469,7 @@ func (m FilterManagementModel) renderTagPanel() string {
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterManagementModel) renderTextPanel() string {
+func (m FilterViewModel) renderTextPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -572,7 +497,7 @@ func (m FilterManagementModel) renderTextPanel() string {
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterManagementModel) renderRadioButton(label string, selected bool, cursor bool) string {
+func (m FilterViewModel) renderRadioButton(label string, selected bool, cursor bool) string {
 	indicator := "( )"
 	if selected {
 		indicator = "(●)"
@@ -592,7 +517,7 @@ func (m FilterManagementModel) renderRadioButton(label string, selected bool, cu
 	return line
 }
 
-func (m FilterManagementModel) renderCheckbox(label string, checked bool, cursor bool) string {
+func (m FilterViewModel) renderCheckbox(label string, checked bool, cursor bool) string {
 	indicator := "[ ]"
 	if checked {
 		indicator = "[✓]"
@@ -611,136 +536,157 @@ func (m FilterManagementModel) renderCheckbox(label string, checked bool, cursor
 	return line
 }
 
-// Helper functions for format manipulation
-func getCurrentFormatIndex(f format) int {
-	if f.brief {
+func getCurrentFormatIndex(f *model.Format) int {
+	if f.Brief {
 		return 0
 	}
-	if f.long {
+	if f.Long {
 		return 1
 	}
-	if f.process {
+	if f.Process {
 		return 2
 	}
-	if f.raw {
+	if f.Raw {
 		return 3
 	}
-	if f.tag {
+	if f.Tag {
 		return 4
 	}
-	if f.thread {
+	if f.Thread {
 		return 5
 	}
-	if f.threadtime {
+	if f.Threadtime {
 		return 6
 	}
-	if f.time {
+	if f.Time {
 		return 7
 	}
-	return 0 // Default to brief
+	return 0
 }
 
-func clearAllFormats(f *format) {
-	f.brief = false
-	f.long = false
-	f.process = false
-	f.raw = false
-	f.tag = false
-	f.thread = false
-	f.threadtime = false
-	f.time = false
+func clearAllFormats(f *model.Format) {
+	f.Brief = false
+	f.Long = false
+	f.Process = false
+	f.Raw = false
+	f.Tag = false
+	f.Thread = false
+	f.Threadtime = false
+	f.Time = false
 }
 
-func setFormatByIndex(f *format, i int) {
+func setFormatByIndex(f *model.Format, i int) {
 	switch i {
 	case 0:
-		f.brief = true
+		f.Brief = true
 	case 1:
-		f.long = true
+		f.Long = true
 	case 2:
-		f.process = true
+		f.Process = true
 	case 3:
-		f.raw = true
+		f.Raw = true
 	case 4:
-		f.tag = true
+		f.Tag = true
 	case 5:
-		f.thread = true
+		f.Thread = true
 	case 6:
-		f.threadtime = true
+		f.Threadtime = true
 	case 7:
-		f.time = true
+		f.Time = true
 	}
 }
 
-func isFormatSelected(f format, field string) bool {
+func isFormatSelected(f *model.Format, field string) bool {
 	switch field {
 	case "brief":
-		return f.brief
+		return f.Brief
 	case "long":
-		return f.long
+		return f.Long
 	case "process":
-		return f.process
+		return f.Process
 	case "raw":
-		return f.raw
+		return f.Raw
 	case "tag":
-		return f.tag
+		return f.Tag
 	case "thread":
-		return f.thread
+		return f.Thread
 	case "threadtime":
-		return f.threadtime
+		return f.Threadtime
 	case "time":
-		return f.time
+		return f.Time
 	}
 	return false
 }
 
-func toggleModifierByIndex(f *format, i int) {
+func toggleModifierByIndex(f *model.Format, i int) {
 	switch i {
 	case 0:
-		f.color = !f.color
+		f.Color = !f.Color
 	case 1:
-		f.descriptive = !f.descriptive
+		f.Descriptive = !f.Descriptive
 	case 2:
-		f.epoch = !f.epoch
+		f.Epoch = !f.Epoch
 	case 3:
-		f.monotonic = !f.monotonic
+		f.Monotonic = !f.Monotonic
 	case 4:
-		f.printable = !f.printable
+		f.Printable = !f.Printable
 	case 5:
-		f.uid = !f.uid
+		f.Uid = !f.Uid
 	case 6:
-		f.usec = !f.usec
+		f.Usec = !f.Usec
 	case 7:
 		f.UTC = !f.UTC
 	case 8:
-		f.year = !f.year
+		f.Year = !f.Year
 	case 9:
-		f.zone = !f.zone
+		f.Zone = !f.Zone
 	}
 }
 
-func isModifierSelected(f format, field string) bool {
+func isModifierSelected(f *model.Format, field string) bool {
 	switch field {
 	case "color":
-		return f.color
+		return f.Color
 	case "descriptive":
-		return f.descriptive
+		return f.Descriptive
 	case "epoch":
-		return f.epoch
+		return f.Epoch
 	case "monotonic":
-		return f.monotonic
+		return f.Monotonic
 	case "printable":
-		return f.printable
+		return f.Printable
 	case "uid":
-		return f.uid
+		return f.Uid
 	case "usec":
-		return f.usec
+		return f.Usec
 	case "UTC":
 		return f.UTC
 	case "year":
-		return f.year
+		return f.Year
 	case "zone":
-		return f.zone
+		return f.Zone
 	}
 	return false
+}
+
+func saveConfigLocally(deviceId string, filter model.Filter, format model.Format) {
+	go func() {
+		c := config.Config{
+			Prefs: config.Prefs{
+				Format:    format.Value(),
+				Modifiers: format.Modifiers(),
+			},
+			Session: config.Session{
+				DeviceId: deviceId,
+				Pkg:      filter.PackageName,
+				Tag:      filter.Tag,
+				Txt:      filter.Text,
+			},
+		}
+
+		_, err := config.Save(&c)
+		if err != nil {
+			slog.Error("Failed to save config", "error", err)
+		}
+	}()
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
-type DeviceSelectionModel struct {
+type DevicesViewModel struct {
 	devices      []model.Device
 	selected     *model.Device
 	cursor       int
@@ -32,19 +32,16 @@ type DeviceSelectedMsg struct {
 	Device model.Device
 }
 
-func New() DeviceSelectionModel {
-	return DeviceSelectionModel{
+func New() DevicesViewModel {
+	return DevicesViewModel{
 		cursor: 0,
 	}
 }
 
-func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd) {
+func (m DevicesViewModel) Update(msg tea.Msg) (DevicesViewModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.viewportSize = model.Size{
-			Width:  msg.Width,
-			Height: msg.Height,
-		}
+	case model.Size:
+		m.viewportSize = msg
 		return m, nil
 
 	case tea.KeyMsg:
@@ -99,12 +96,12 @@ func (m DeviceSelectionModel) Update(msg tea.Msg) (DeviceSelectionModel, tea.Cmd
 	return m, nil
 }
 
-func (m DeviceSelectionModel) View() string {
+func (m DevicesViewModel) View() string {
 	content := m.renderDevicePanelWithHelp()
 	return m.centerContent(content)
 }
 
-func (m DeviceSelectionModel) centerContent(content string) string {
+func (m DevicesViewModel) centerContent(content string) string {
 	if m.viewportSize.Width == 0 || m.viewportSize.Height == 0 {
 		return content
 	}
@@ -118,7 +115,7 @@ func (m DeviceSelectionModel) centerContent(content string) string {
 	)
 }
 
-func (m DeviceSelectionModel) renderRadioButton(label string, selected bool, cursor bool) string {
+func (m DevicesViewModel) renderRadioButton(label string, selected bool, cursor bool) string {
 	indicator := "( )"
 	if selected {
 		indicator = "(●)"
@@ -138,7 +135,7 @@ func (m DeviceSelectionModel) renderRadioButton(label string, selected bool, cur
 	return line
 }
 
-func (m DeviceSelectionModel) renderDevicePanel() string {
+func (m DevicesViewModel) renderDevicePanel() string {
 	var b strings.Builder
 
 	panelTitle := lipgloss.NewStyle().
@@ -195,7 +192,7 @@ func (m DeviceSelectionModel) renderDevicePanel() string {
 	return panelStyle.Render(b.String())
 }
 
-func (m DeviceSelectionModel) renderDevicePanelWithHelp() string {
+func (m DevicesViewModel) renderDevicePanelWithHelp() string {
 	var b strings.Builder
 
 	devicePanel := m.renderDevicePanel()

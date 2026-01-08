@@ -25,7 +25,7 @@ type Prefs struct {
 }
 
 type Session struct {
-	DeviceID string `json:"device_id,omitempty"`
+	DeviceId string `json:"device_id,omitempty"`
 	Pkg      string `json:"package_name,omitempty"`
 	Tag      string `json:"log_tag,omitempty"`
 	Txt      string `json:"log_text,omitempty"`
@@ -38,7 +38,7 @@ func DefaultConfig() Config {
 			Modifiers: []string{"color"},
 		},
 		Session: Session{
-			DeviceID: "",
+			DeviceId: "",
 			Pkg:      "",
 			Tag:      "",
 			Txt:      "",

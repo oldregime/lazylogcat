@@ -11,6 +11,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 const initialLogHistorySeconds = 180
@@ -33,7 +35,7 @@ func timeDiffInSeconds(start *time.Time, end *time.Time) int {
 	return int(end.Sub(*start).Seconds())
 }
 
-func (m LogcatModel) ConnectToLogcat() tea.Msg {
+func ConnectToLogcat(m LogcatViewModel) tea.Msg {
 	now := time.Now()
 	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
 	t := initialLogHistorySeconds
@@ -43,8 +45,8 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 
 	args := []string{"-s", m.device.Id, "logcat", "-T", strconv.Itoa(t)}
 
-	if m.filterMgmt.filter.packageName != "" {
-		pidStr, err := getPidByPackageName(m.device.Id, m.filterMgmt.filter.packageName)
+	if m.filter.PackageName != "" {
+		pidStr, err := util.GetPidByPackageName(m.device.Id, m.filter.PackageName)
 		if err != nil {
 			return logcatErrorMsg{Err: fmt.Errorf("failed to get pid by package name: %w", err)}
 		}
@@ -53,59 +55,28 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 		}
 	}
 
-	if m.filterMgmt.format != (format{}) {
+	if m.format != (model.Format{}) {
 		args = append(args, "-v")
 		var formats []string
 
 		// Add single-choice format (only one should be true)
-		if m.filterMgmt.format.brief {
-			formats = append(formats, "brief")
-		} else if m.filterMgmt.format.long {
-			formats = append(formats, "long")
-		} else if m.filterMgmt.format.process {
-			formats = append(formats, "process")
-		} else if m.filterMgmt.format.raw {
-			formats = append(formats, "raw")
-		} else if m.filterMgmt.format.tag {
-			formats = append(formats, "tag")
-		} else if m.filterMgmt.format.thread {
-			formats = append(formats, "thread")
-		} else if m.filterMgmt.format.threadtime {
-			formats = append(formats, "threadtime")
-		} else if m.filterMgmt.format.time {
-			formats = append(formats, "time")
+		format := m.format.Value()
+		if format != "" {
+			formats = append(formats, format)
 		}
 
 		// Add multi-choice modifiers
-		// if m.filterMgmt.format.color {
-		// 	formats = append(formats, "color")
-		// }
-		if m.filterMgmt.format.descriptive {
-			formats = append(formats, "descriptive")
-		}
-		if m.filterMgmt.format.epoch {
-			formats = append(formats, "epoch")
-		}
-		if m.filterMgmt.format.monotonic {
-			formats = append(formats, "monotonic")
-		}
-		if m.filterMgmt.format.printable {
-			formats = append(formats, "printable")
-		}
-		if m.filterMgmt.format.uid {
-			formats = append(formats, "uid")
-		}
-		if m.filterMgmt.format.usec {
-			formats = append(formats, "usec")
-		}
-		if m.filterMgmt.format.UTC {
-			formats = append(formats, "UTC")
-		}
-		if m.filterMgmt.format.year {
-			formats = append(formats, "year")
-		}
-		if m.filterMgmt.format.zone {
-			formats = append(formats, "zone")
+
+		formats = append(formats, m.format.Modifiers()...)
+
+		{ // Color modifier is not provided to logcat. Instead, the program handles coloring itself.
+			colorless := make([]string, 0, len(formats))
+			for _, f := range formats {
+				if f != "color" {
+					colorless = append(colorless, f)
+				}
+			}
+			formats = colorless
 		}
 
 		if len(formats) > 0 {
@@ -114,11 +85,11 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 	}
 
 	tag := "*"
-	if m.filterMgmt.filter.tag != "" {
-		tag = m.filterMgmt.filter.tag
+	if m.filter.Tag != "" {
+		tag = m.filter.Tag
 		args = append(args, "-s")
 	}
-	args = append(args, fmt.Sprintf("%s:%s", tag, m.filterMgmt.filter.level))
+	args = append(args, fmt.Sprintf("%s:%s", tag, m.filter.Level))
 
 	slog.Debug("Executing adb", "args", args)
 
@@ -140,7 +111,7 @@ func (m LogcatModel) ConnectToLogcat() tea.Msg {
 	}
 }
 
-func (m LogcatModel) WaitForNextLine() tea.Msg {
+func WaitForNextLine(m LogcatViewModel) tea.Msg {
 	if m.scanner == nil {
 		return nil
 	}
@@ -148,11 +119,11 @@ func (m LogcatModel) WaitForNextLine() tea.Msg {
 	if m.scanner.Scan() {
 		s := m.scanner.Text()
 		if strings.Trim(s, "\n\r ") == "" {
-			return m.WaitForNextLine()
+			return WaitForNextLine(m)
 		}
-		f := m.filterMgmt.filter.text
+		f := m.filter.Text
 		if f != "" && !strings.Contains(s, f) {
-			return m.WaitForNextLine()
+			return WaitForNextLine(m)
 		}
 		return logcatLineMsg{Line: m.scanner.Text()}
 	}
@@ -164,7 +135,7 @@ func (m LogcatModel) WaitForNextLine() tea.Msg {
 	return nil
 }
 
-func (m *LogcatModel) Close() {
+func Close(m *LogcatViewModel) {
 	if m.cmd != nil && m.cmd.Process != nil {
 		m.cmd.Process.Kill()
 		m.cmd.Wait()
@@ -172,13 +143,4 @@ func (m *LogcatModel) Close() {
 	}
 	m.scanner = nil
 	m.log = nil
-}
-
-func getPidByPackageName(deviceId string, pkg string) (string, error) {
-	pidCmd := exec.Command("adb", "-s", deviceId, "shell", "pidof", pkg)
-	pid, err := pidCmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get pid: %w", err)
-	}
-	return strings.Trim(string(pid), "\n\r "), nil
 }
