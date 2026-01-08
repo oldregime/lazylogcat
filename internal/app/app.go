@@ -12,7 +12,7 @@ import (
 var logFile *os.File
 
 func SetupLogging() error {
-	f, err := tea.LogToFile("debug.log", "debug")
+	f, err := tea.LogToFile(".lazylogcat.log", "debug")
 	if err != nil {
 		return fmt.Errorf("could not open log file: %w", err)
 	}

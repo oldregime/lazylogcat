@@ -17,12 +17,23 @@ This project is in early development. Expect bugs and missing features.
 go install github.com/parfenovvs/lazylogcat@latest
 ```
 
+## Usage
+
+```bash
+# Launch the TUI
+lazylogcat
+
+# Enable debug logging
+lazylogcat --debug
+```
+
 ### Keyboard Shortcuts
 
 **Device View:**
-- Navigate devices with arrow keys or vim keys (`j`/`k`)
+- `↑`/`k` or `↓`/`j` - Navigate devices
 - `Enter` - Connect to selected device
 - `r` - Refresh device list
+- `Ctrl+c` - Quit
 
 **Logcat View:**
 
@@ -31,18 +42,16 @@ go install github.com/parfenovvs/lazylogcat@latest
 - `G` - Jump to bottom
 
 *Filtering & Display:*
-- `Alt+p` - Filter by package name
-- `Alt+c` - Toggle color output
-- `Alt+t` - Toggle tag format
+- `Ctrl+f` - Open filter management (package, tag, text, log level, format options)
 - `Alt+w` - Toggle soft wrap
-- `p` - Cycle through log priority levels (V→D→I→W→E→F)
+- `Alt+l` - Cycle through log priority levels (V→D→I→W→E→F)
 
 *Visual Mode & Copying:*
 - `v` - Enter/exit visual mode
 - `V` - Start/clear line selection in visual mode
-- `j`/`k` or arrow keys - Navigate in visual mode
+- `j`/`↓` or `k`/`↑` - Navigate in visual mode
 - `y` - Yank (copy) current line or selection to clipboard
-- `Esc` - Exit visual mode
+- `Esc` - Exit visual mode or clear selection
 
 *Connection:*
 - `Ctrl+d` - Back to device selection

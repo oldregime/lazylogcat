@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&debugFlag, "debug", false, "Enable debug logging to debug.log file")
+	rootCmd.PersistentFlags().BoolVar(&debugFlag, "debug", false, "Enable debug logging to .lazylogcat.log file")
 }
 
 func Execute() error {
