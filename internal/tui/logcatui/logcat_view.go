@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
@@ -115,6 +116,9 @@ func (m LogcatModel) Update(msg tea.Msg) (LogcatModel, tea.Cmd) {
 		return m, nil
 
 	case filterExitMsg:
+		if msg.changed {
+			saveConfigLocally(&m)
+		}
 		m.state = logcatViewing
 		m.Close()
 		return m, m.ConnectToLogcat
@@ -455,4 +459,84 @@ func (m LogcatModel) footerView() string {
 		Render(helpText)
 
 	return help
+}
+
+func saveConfigLocally(m *LogcatModel) {
+	go func() {
+		c := config.Config{
+			Prefs: config.Prefs{
+				Format:    getFormatName(m.filterMgmt.format),
+				Modifiers: getModifiers(m.filterMgmt.format),
+			},
+			Session: config.Session{
+				DeviceID: m.device.Id,
+				Pkg:      m.filterMgmt.filter.packageName,
+				Tag:      m.filterMgmt.filter.tag,
+				Txt:      m.filterMgmt.filter.text,
+			},
+		}
+
+		_, err := config.Save(&c)
+		if err != nil {
+			slog.Error("Failed to save config", "error", err)
+		}
+	}()
+}
+
+func getFormatName(f format) string {
+	switch {
+	case f.brief:
+		return "brief"
+	case f.long:
+		return "long"
+	case f.process:
+		return "process"
+	case f.raw:
+		return "raw"
+	case f.tag:
+		return "tag"
+	case f.thread:
+		return "thread"
+	case f.threadtime:
+		return "threadtime"
+	case f.time:
+		return "time"
+	default:
+		return ""
+	}
+}
+
+func getModifiers(f format) []string {
+	var mods []string
+	if f.color {
+		mods = append(mods, "color")
+	}
+	if f.descriptive {
+		mods = append(mods, "descriptive")
+	}
+	if f.epoch {
+		mods = append(mods, "epoch")
+	}
+	if f.monotonic {
+		mods = append(mods, "monotonic")
+	}
+	if f.printable {
+		mods = append(mods, "printable")
+	}
+	if f.uid {
+		mods = append(mods, "uid")
+	}
+	if f.usec {
+		mods = append(mods, "usec")
+	}
+	if f.UTC {
+		mods = append(mods, "UTC")
+	}
+	if f.year {
+		mods = append(mods, "year")
+	}
+	if f.zone {
+		mods = append(mods, "zone")
+	}
+	return mods
 }

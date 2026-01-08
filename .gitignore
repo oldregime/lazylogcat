@@ -1,3 +1,5 @@
 lazylogcat
 
 debug.log
+
+.lazylogcat.json
