@@ -28,28 +28,28 @@ const (
 var (
 	// Foreground Colors - Borders
 	// FGBorder is used for inactive panel borders, dividers, and outlines
-	FGBorder = lipgloss.AdaptiveColor{Light: brightBlack, Dark: black}
+	FGBorder = lipgloss.AdaptiveColor{Light: black, Dark: black}
 
 	// FGActiveBorder is used for active panel border highlighting
-	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightGreen, Dark: green}
+	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
 
 	// Foreground Colors - Text
 	// FGTitle is used for section titles, headers, and panel names (inactive state)
-	FGTitle = lipgloss.AdaptiveColor{Light: brightBlack, Dark: white}
+	FGTitle = lipgloss.AdaptiveColor{Light: brightBlack, Dark: brightBlack}
 
 	// FGActiveTitle is used for active panel title text
-	FGActiveTitle = lipgloss.AdaptiveColor{Light: brightGreen, Dark: green}
+	FGActiveTitle = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
 
 	// FGSelected is used for selected item text
-	FGSelected = lipgloss.AdaptiveColor{Light: brightWhite, Dark: white}
+	FGSelected = lipgloss.AdaptiveColor{Light: brightWhite, Dark: brightWhite}
 
 	// FGHelp is used for help text and secondary information
-	FGHelp = lipgloss.AdaptiveColor{Light: brightBlack, Dark: black}
+	FGHelp = lipgloss.AdaptiveColor{Light: black, Dark: black}
 
 	// FGError is used for error messages and validation warnings
-	FGError = lipgloss.AdaptiveColor{Light: brightRed, Dark: red}
+	FGError = lipgloss.AdaptiveColor{Light: brightRed, Dark: brightRed}
 
 	// Background Colors
 	// BGCursor is used for cursor/selection highlight backgrounds
-	BGCursor = lipgloss.AdaptiveColor{Light: brightBlack, Dark: black}
+	BGCursor = lipgloss.AdaptiveColor{Light: black, Dark: black}
 )
