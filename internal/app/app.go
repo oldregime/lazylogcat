@@ -4,12 +4,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 )
 
 var logFile *os.File
+
+var (
+	ErrAdbNotFound = fmt.Errorf("adb not found in PATH")
+)
+
+func PreLaunchChecks() error {
+	_, err := exec.LookPath("adb")
+	if err != nil {
+		return ErrAdbNotFound
+	}
+	return nil
+}
 
 func SetupLogging() error {
 	f, err := tea.LogToFile(".lazylogcat.log", "debug")
