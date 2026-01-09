@@ -1,12 +1,15 @@
-package tui
+package mainui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/devicesui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/filterui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
+	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 var style = lipgloss.NewStyle()
@@ -22,16 +25,51 @@ const (
 type MainModel struct {
 	viewportSize model.Size
 	state        sessionState
-	devicesView  devicesui.DevicesViewModel
-	logcatView   logcatui.LogcatViewModel
-	filterView   filterui.FilterViewModel
+
+	currentDevice *model.Device
+	filter        model.Filter
+	format        model.Format
+
+	devicesView devicesui.DevicesViewModel
+	logcatView  logcatui.LogcatViewModel
+	filterView  filterui.FilterViewModel
 }
 
-func InitMainModel() MainModel {
-	return MainModel{
-		state:       devicesView,
-		devicesView: devicesui.New(),
+func InitMainModel(c config.Config) MainModel {
+	var m MainModel
+
+	devices, err := util.GetConnectedDevices()
+	if err == nil && len(devices) > 0 {
+		for _, d := range devices {
+			if d.Id == c.Session.DeviceId {
+				m.currentDevice = &d
+				break
+			}
+		}
 	}
+
+	if m.currentDevice == nil {
+		c.Session.Pkg = ""
+	}
+	if c.Session.Pkg != "" {
+		_, err := util.GetPidByPackageName(m.currentDevice.Id, c.Session.Pkg)
+		if err != nil {
+			c.Session.Pkg = ""
+		}
+	}
+
+	m.filter = util.FilterFromConfig(&c)
+	m.format = util.FormatFromConfig(&c)
+
+	if m.currentDevice == nil {
+		m.state = devicesView
+		m.devicesView = devicesui.New()
+	} else {
+		m.state = logcatView
+		m.logcatView = logcatui.New(m.viewportSize, *m.currentDevice, m.filter, m.format)
+	}
+
+	return m
 }
 
 func (m MainModel) Init() tea.Cmd {
@@ -64,51 +102,53 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case logcatView:
 			newLogcatViewing, newCmd := m.logcatView.Update(resizeMsg)
 			m.logcatView = newLogcatViewing
-			return m, newCmd
+			cmds = append(cmds, newCmd)
 		case filterView:
 			newFilterView, newCmd := m.filterView.Update(resizeMsg)
 			m.filterView = newFilterView
-			return m, newCmd
+			cmds = append(cmds, newCmd)
 		case devicesView:
 			newDevicesView, newCmd := m.devicesView.Update(resizeMsg)
 			m.devicesView = newDevicesView
-			return m, newCmd
+			cmds = append(cmds, newCmd)
 		}
-		return m, nil
 
 	case devicesui.DeviceSelectedMsg:
-		m.state = logcatView
-		m.logcatView = logcatui.New(m.viewportSize, msg.Device)
+		m.currentDevice = &msg.Device
 		return m, func() tea.Msg {
-			return logcatui.ConnectToLogcat(m.logcatView)
+			return tui.NavigateToLogcatCmd{}
 		}
 
-	case logcatui.GoToFilterMsg:
+	case tui.NavigateToFilterCmd:
 		m.state = filterView
 		m.filterView = filterui.New(
 			m.viewportSize,
-			msg.Device.Id,
-			msg.Filter,
-			msg.Format,
+			m.currentDevice.Id,
+			m.filter,
+			m.format,
 		)
 		return m, nil
 
-	case filterui.FilterExitMsg:
-		if m.state == filterView {
-			m.state = logcatView
-			return m, func() tea.Msg {
-				return logcatui.UpdateFiltersMsg{
-					Filter: msg.Filter,
-					Format: msg.Format,
-				}
-			}
+	case tui.UpdateFilterCmd:
+		m.filter = msg.Filter
+		m.format = msg.Format
+		return m, func() tea.Msg {
+			return tui.NavigateToLogcatCmd{}
 		}
 
-	case logcatui.GoToDevicesMsg:
+	case tui.NavigateToLogcatCmd:
+		m.state = logcatView
+		logcatui.Close(&m.logcatView)
+		m.logcatView = logcatui.New(m.viewportSize, *m.currentDevice, m.filter, m.format)
+		return m, func() tea.Msg {
+			return tui.ReconnectLogcatCmd{}
+		}
+
+	case tui.NavigateToDevicesCmd:
 		logcatui.Close(&m.logcatView)
 		m.state = devicesView
 		return m, func() tea.Msg {
-			return devicesui.GetDevices(msg.Selected)
+			return devicesui.GetDevices(m.currentDevice)
 		}
 	}
 

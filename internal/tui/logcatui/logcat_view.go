@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -30,8 +31,6 @@ var (
 
 type LogcatViewModel struct {
 	viewport      viewport.Model
-	cmd           *exec.Cmd
-	scanner       *bufio.Scanner
 	device        model.Device
 	filter        model.Filter
 	format        model.Format
@@ -39,7 +38,7 @@ type LogcatViewModel struct {
 	visualMode    bool
 	currentLine   int
 	startSelected int
-	softWrap      bool
+	softWrap      bool // TODO wrap with prefs
 	err           error
 }
 
@@ -67,33 +66,13 @@ type logcatConnectedMsg struct {
 	scanner *bufio.Scanner
 }
 
-type GoToDevicesMsg struct {
-	Selected *model.Device
-}
-
-type GoToFilterMsg struct {
-	Device model.Device
-	Filter model.Filter
-	Format model.Format
-}
-
-type UpdateFiltersMsg struct {
-	Filter model.Filter
-	Format model.Format
-}
-
-func New(viewportSize model.Size, device model.Device) LogcatViewModel {
+func New(viewportSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
 	m := LogcatViewModel{
 		device:        device,
 		softWrap:      true,
 		startSelected: -1,
-		filter: model.Filter{
-			Level: model.LvlV,
-		},
-		format: model.Format{
-			Brief: true,
-			Color: true,
-		},
+		filter:        filter,
+		format:        format,
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -124,32 +103,25 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+r":
-			Close(&m)
 			return m, func() tea.Msg {
-				return ConnectToLogcat(m)
+				return tui.ReconnectLogcatCmd{}
 			}
 
 		case "ctrl+d":
 			return m, func() tea.Msg {
-				return GoToDevicesMsg{
-					Selected: &m.device,
-				}
+				return tui.NavigateToDevicesCmd{}
 			}
 
 		case "ctrl+f":
 			return m, func() tea.Msg {
-				return GoToFilterMsg{
-					Device: m.device,
-					Filter: m.filter,
-					Format: m.format,
-				}
+				return tui.NavigateToFilterCmd{}
 			}
 
 		case "alt+w":
 			if !m.visualMode {
 				m.softWrap = !m.softWrap
 				return m, func() tea.Msg {
-					return ConnectToLogcat(m)
+					return tui.ReconnectLogcatCmd{}
 				}
 			}
 			return m, nil
@@ -161,9 +133,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case "alt+l":
 			if !m.visualMode {
 				m.filter.Level = m.filter.Level.Next()
-				Close(&m)
 				return m, func() tea.Msg {
-					return ConnectToLogcat(m)
+					return tui.ReconnectLogcatCmd{}
 				}
 			}
 
@@ -175,9 +146,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 				m.Render()
 				return m, nil
 			}
-			Close(&m)
 			return m, func() tea.Msg {
-				return ConnectToLogcat(m)
+				return tui.ReconnectLogcatCmd{}
 			}
 
 		case "V":
@@ -200,9 +170,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 				}
 				m.visualMode = false
 				m.startSelected = -1
-				Close(&m)
 				return m, func() tea.Msg {
-					return ConnectToLogcat(m)
+					return tui.ReconnectLogcatCmd{}
 				}
 			}
 
@@ -244,9 +213,14 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			}
 		}
 
+	case tui.ReconnectLogcatCmd:
+		slog.Info("Reconnecting to logcat")
+		Close(&m)
+		return m, func() tea.Msg {
+			return ConnectToLogcat(m)
+		}
+
 	case logcatConnectedMsg:
-		m.cmd = msg.cmd
-		m.scanner = msg.scanner
 		return m, func() tea.Msg {
 			return WaitForNextLine(m)
 		}
@@ -279,14 +253,6 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case logcatErrorMsg:
 		m.err = msg.Err
 		return m, nil
-
-	case UpdateFiltersMsg:
-		m.filter = msg.Filter
-		m.format = msg.Format
-		Close(&m)
-		return m, func() tea.Msg {
-			return ConnectToLogcat(m)
-		}
 	}
 
 	if !m.visualMode {

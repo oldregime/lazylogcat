@@ -10,17 +10,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
-
-type FilterExitMsg struct {
-	Changed bool
-	Filter  model.Filter
-	Format  model.Format
-}
-
-const priorities = "VDIWEF"
 
 type FilterViewModel struct {
 	viewportSize model.Size
@@ -188,21 +181,19 @@ func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg {
-				return FilterExitMsg{
-					Changed: changed,
-					Filter:  m.filter,
-					Format:  m.format,
+				if changed {
+					return tui.UpdateFilterCmd{
+						Filter: m.filter,
+						Format: m.format,
+					}
 				}
+				return tui.NavigateToLogcatCmd{}
 			}
 
 		case "esc":
 			m.Exit(false)
 			return m, func() tea.Msg {
-				return FilterExitMsg{
-					Changed: false,
-					Filter:  m.filter,
-					Format:  m.format,
-				}
+				return tui.NavigateToLogcatCmd{}
 			}
 		case "tab", "shift+tab":
 			switch m.activePanel {

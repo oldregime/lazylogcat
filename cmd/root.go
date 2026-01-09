@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/parfenovvs/lazylogcat/internal/app"
+	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,8 @@ var rootCmd = &cobra.Command{
 		if err := app.PreLaunchChecks(); err != nil {
 			return err
 		}
-		return app.LaunchTUI()
+		config := config.DefaultConfig()
+		return app.LaunchTUI(config)
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 		if debugFlag {

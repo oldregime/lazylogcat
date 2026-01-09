@@ -7,13 +7,14 @@ import (
 	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/parfenovvs/lazylogcat/internal/tui"
+	"github.com/parfenovvs/lazylogcat/internal/config"
+	"github.com/parfenovvs/lazylogcat/internal/tui/mainui"
 )
 
 var logFile *os.File
 
 var (
-	ErrAdbNotFound = fmt.Errorf("adb not found in PATH")
+	ErrAdbNotFound = fmt.Errorf("adb not found")
 )
 
 func PreLaunchChecks() error {
@@ -39,9 +40,9 @@ func SetupLogging() error {
 	return nil
 }
 
-func LaunchTUI() error {
+func LaunchTUI(c config.Config) error {
 	p := tea.NewProgram(
-		tui.InitMainModel(),
+		mainui.InitMainModel(c),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

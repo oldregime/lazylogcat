@@ -4,3 +4,5 @@ debug.log
 .lazylogcat.log
 
 .lazylogcat.json
+
+*.local.md

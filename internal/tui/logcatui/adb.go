@@ -15,7 +15,10 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
-const initialLogHistorySeconds = 180
+const initialLogHistorySeconds = 60
+
+var cmd *exec.Cmd
+var scanner *bufio.Scanner
 
 var firstConnectionTime *time.Time
 var once sync.Once
@@ -38,10 +41,7 @@ func timeDiffInSeconds(start *time.Time, end *time.Time) int {
 func ConnectToLogcat(m LogcatViewModel) tea.Msg {
 	now := time.Now()
 	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
-	t := initialLogHistorySeconds
-	if diff > 180 {
-		t = diff
-	}
+	t := max(diff, initialLogHistorySeconds)
 
 	args := []string{"-s", m.device.Id, "logcat", "-T", strconv.Itoa(t)}
 
@@ -89,11 +89,16 @@ func ConnectToLogcat(m LogcatViewModel) tea.Msg {
 		tag = m.filter.Tag
 		args = append(args, "-s")
 	}
-	args = append(args, fmt.Sprintf("%s:%s", tag, m.filter.Level))
+
+	lvl := m.filter.Level
+	if lvl == "" {
+		lvl = model.LvlD
+	}
+	args = append(args, fmt.Sprintf("%s:%s", tag, lvl))
 
 	slog.Debug("Executing adb", "args", args)
 
-	cmd := exec.Command("adb", args...)
+	cmd = exec.Command("adb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to get stdout pipe: %w", err)}
@@ -103,7 +108,7 @@ func ConnectToLogcat(m LogcatViewModel) tea.Msg {
 		return logcatErrorMsg{Err: fmt.Errorf("failed to start adb: %w", err)}
 	}
 
-	scanner := bufio.NewScanner(stdout)
+	scanner = bufio.NewScanner(stdout)
 
 	return logcatConnectedMsg{
 		cmd:     cmd,
@@ -112,12 +117,12 @@ func ConnectToLogcat(m LogcatViewModel) tea.Msg {
 }
 
 func WaitForNextLine(m LogcatViewModel) tea.Msg {
-	if m.scanner == nil {
+	if scanner == nil {
 		return nil
 	}
 
-	if m.scanner.Scan() {
-		s := m.scanner.Text()
+	if scanner.Scan() {
+		s := scanner.Text()
 		if strings.Trim(s, "\n\r ") == "" {
 			return WaitForNextLine(m)
 		}
@@ -125,10 +130,10 @@ func WaitForNextLine(m LogcatViewModel) tea.Msg {
 		if f != "" && !strings.Contains(s, f) {
 			return WaitForNextLine(m)
 		}
-		return logcatLineMsg{Line: m.scanner.Text()}
+		return logcatLineMsg{Line: scanner.Text()}
 	}
 
-	if err := m.scanner.Err(); err != nil {
+	if err := scanner.Err(); err != nil {
 		return logcatErrorMsg{Err: fmt.Errorf("error reading logcat: %w", err)}
 	}
 
@@ -136,11 +141,11 @@ func WaitForNextLine(m LogcatViewModel) tea.Msg {
 }
 
 func Close(m *LogcatViewModel) {
-	if m.cmd != nil && m.cmd.Process != nil {
-		m.cmd.Process.Kill()
-		m.cmd.Wait()
-		m.cmd = nil
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+		cmd = nil
 	}
-	m.scanner = nil
+	scanner = nil
 	m.log = nil
 }

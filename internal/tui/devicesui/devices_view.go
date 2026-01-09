@@ -2,13 +2,14 @@ package devicesui
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
+	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 type DevicesViewModel struct {
@@ -17,11 +18,6 @@ type DevicesViewModel struct {
 	cursor       int
 	viewportSize model.Size
 	err          error
-}
-
-type getDevicesMsg struct {
-	devices  []model.Device
-	selected *model.Device
 }
 
 type getDevicesErrorMsg struct {
@@ -48,7 +44,7 @@ func (m DevicesViewModel) Update(msg tea.Msg) (DevicesViewModel, tea.Cmd) {
 		switch msg.String() {
 		case "r":
 			return m, func() tea.Msg {
-				return GetDevices(m.selected)
+				return tui.LoadDevicesCmd{}
 			}
 
 		case "j", "down":
@@ -73,13 +69,18 @@ func (m DevicesViewModel) Update(msg tea.Msg) (DevicesViewModel, tea.Cmd) {
 			return m, nil
 		}
 
-	case getDevicesMsg:
-		m.devices = msg.devices
-		if msg.selected != nil {
+	case tui.LoadDevicesCmd:
+		return m, func() tea.Msg {
+			return GetDevices(m.selected)
+		}
+
+	case tui.DevicesLoadedMsg:
+		m.devices = msg.Devices
+		if msg.Selected != nil {
 			for i, device := range m.devices {
-				if device.Id == msg.selected.Id {
+				if device.Id == msg.Selected.Id {
 					m.cursor = i
-					m.selected = msg.selected
+					m.selected = msg.Selected
 					break
 				}
 			}
@@ -210,39 +211,18 @@ func (m DevicesViewModel) renderDevicePanelWithHelp() string {
 }
 
 func GetDevices(selected *model.Device) tea.Msg {
-	cmd := exec.Command("adb", "devices", "-l")
-
-	output, err := cmd.Output()
+	devices, err := util.GetConnectedDevices()
 	if err != nil {
 		return getDevicesErrorMsg{Err: fmt.Errorf("failed to get devices: %w", err)}
 	}
 
-	devices := make([]model.Device, 0)
-
-	strOutput := string(output)
-	lines := strings.Split(strOutput, "\n")
 	var preSelected *model.Device
-	for _, l := range lines[1:] {
-		if strings.Contains(l, "device") {
-			parts := strings.Fields(l)
-			if len(parts) == 0 {
-				continue
-			}
-			id := parts[0]
-			name := "Undefined"
-			for _, p := range parts {
-				if strings.HasPrefix(p, "model:") {
-					product := strings.Split(p, ":")
-					name = product[len(product)-1]
-					break
-				}
-			}
-			devices = append(devices, model.Device{Id: id, Name: name})
-			if selected != nil && selected.Id == id {
-				preSelected = selected
-			}
+	for _, device := range devices {
+		if selected != nil && selected.Id == device.Id {
+			preSelected = selected
+			break
 		}
 	}
 
-	return getDevicesMsg{devices: devices, selected: preSelected}
+	return tui.DevicesLoadedMsg{Devices: devices, Selected: preSelected}
 }
