@@ -42,6 +42,8 @@ var rootCmd = &cobra.Command{
 				slog.Error("Failed to load config file, using default config", "error", err)
 			}
 			slog.Debug("Configuration loaded", "Config", c.String())
+		} else {
+			c = config.DefaultConfig()
 		}
 		return app.LaunchTUI(c)
 	},

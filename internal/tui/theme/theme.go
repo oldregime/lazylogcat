@@ -34,9 +34,6 @@ var (
 	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
 
 	// Foreground Colors - Text
-	// FGTitle is used for section titles, headers, and panel names (inactive state)
-	FGTitle = lipgloss.AdaptiveColor{Light: brightBlack, Dark: brightBlack}
-
 	// FGActiveTitle is used for active panel title text
 	FGActiveTitle = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
 
@@ -44,7 +41,7 @@ var (
 	FGSelected = lipgloss.AdaptiveColor{Light: brightWhite, Dark: brightWhite}
 
 	// FGHelp is used for help text and secondary information
-	FGHelp = lipgloss.AdaptiveColor{Light: black, Dark: black}
+	FGHelp = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
 
 	// FGError is used for error messages and validation warnings
 	FGError = lipgloss.AdaptiveColor{Light: brightRed, Dark: brightRed}
@@ -71,4 +68,18 @@ func GetLogColor(level string) lipgloss.AdaptiveColor {
 	default:
 		return lipgloss.AdaptiveColor{}
 	}
+}
+
+// Panel returns a base panel style with inactive border
+func Panel() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(FGBorder).
+		Padding(1, 2)
+}
+
+// ActivePanel returns a panel style with active border highlighting
+func ActivePanel() lipgloss.Style {
+	return Panel().
+		BorderForeground(FGActiveBorder)
 }

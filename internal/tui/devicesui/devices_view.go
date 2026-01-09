@@ -13,11 +13,11 @@ import (
 )
 
 type DevicesViewModel struct {
-	devices      []model.Device
-	selected     *model.Device
-	cursor       int
-	viewportSize model.Size
-	err          error
+	parentSize model.Size
+	devices    []model.Device
+	selected   *model.Device
+	cursor     int
+	err        error
 }
 
 type getDevicesErrorMsg struct {
@@ -28,16 +28,16 @@ type DeviceSelectedMsg struct {
 	Device model.Device
 }
 
-func New() DevicesViewModel {
+func New(parentSize model.Size) DevicesViewModel {
 	return DevicesViewModel{
-		cursor: 0,
+		parentSize: parentSize,
 	}
 }
 
 func (m DevicesViewModel) Update(msg tea.Msg) (DevicesViewModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case model.Size:
-		m.viewportSize = msg
+		m.parentSize = msg
 		return m, nil
 
 	case tea.KeyMsg:
@@ -103,13 +103,13 @@ func (m DevicesViewModel) View() string {
 }
 
 func (m DevicesViewModel) centerContent(content string) string {
-	if m.viewportSize.Width == 0 || m.viewportSize.Height == 0 {
+	if m.parentSize.Width == 0 || m.parentSize.Height == 0 {
 		return content
 	}
 
 	return lipgloss.Place(
-		m.viewportSize.Width,
-		m.viewportSize.Height,
+		m.parentSize.Width,
+		m.parentSize.Height,
 		lipgloss.Center, // Horizontal position
 		lipgloss.Center, // Vertical position
 		content,
@@ -184,11 +184,8 @@ func (m DevicesViewModel) renderDevicePanel() string {
 		}
 	}
 
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGActiveBorder).
-		Padding(1, 2).
-		Width(m.viewportSize.Width/2 - 4)
+	panelStyle := theme.ActivePanel().
+		Width(m.parentSize.Width/2 - 4)
 
 	return panelStyle.Render(b.String())
 }
@@ -201,7 +198,7 @@ func (m DevicesViewModel) renderDevicePanelWithHelp() string {
 
 	help := lipgloss.NewStyle().
 		Foreground(theme.FGHelp).
-		Width(m.viewportSize.Width/2 - 4).
+		Width(m.parentSize.Width/2 - 4).
 		AlignHorizontal(lipgloss.Center).
 		Render("↑/k up • ↓/j down • enter select • r refresh • ctrl+c quit")
 

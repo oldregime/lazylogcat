@@ -20,9 +20,8 @@ const maxLogLines = 1000
 
 var (
 	titleStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Right = "├"
-		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
+		return theme.Panel().
+			Padding(0, 1)
 	}()
 
 	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • alt+w toggle wrap • alt+l toggle level • G jump to recent • v visual"
@@ -30,6 +29,7 @@ var (
 )
 
 type LogcatViewModel struct {
+	parentSize    model.Size
 	viewport      viewport.Model
 	device        model.Device
 	filter        model.Filter
@@ -66,8 +66,9 @@ type logcatConnectedMsg struct {
 	scanner *bufio.Scanner
 }
 
-func New(viewportSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
+func New(parentSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
 	m := LogcatViewModel{
+		parentSize:    parentSize,
 		device:        device,
 		softWrap:      true,
 		startSelected: -1,
@@ -77,7 +78,7 @@ func New(viewportSize model.Size, device model.Device, filter model.Filter, form
 
 	headerHeight := lipgloss.Height(m.headerView())
 	footerHeight := lipgloss.Height(m.footerView())
-	vp := viewport.New(viewportSize.Width, viewportSize.Height-footerHeight-headerHeight)
+	vp := viewport.New(parentSize.Width, parentSize.Height-footerHeight-headerHeight-1)
 	m.viewport = vp
 
 	return m
@@ -91,10 +92,15 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case model.Size:
+		m.parentSize = msg
+		return m, func() tea.Msg {
+			return tui.MeasureCmd{}
+		}
+	case tui.MeasureCmd:
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - footerHeight - headerHeight
+		m.viewport.Width = m.parentSize.Width
+		m.viewport.Height = m.parentSize.Height - footerHeight - headerHeight - 1
 		m.Render()
 		return m, nil
 	}
@@ -214,11 +220,12 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 	case tui.ReconnectLogcatCmd:
-		slog.Info("Reconnecting to logcat")
 		Close(&m)
-		return m, func() tea.Msg {
+		return m, tea.Batch(func() tea.Msg {
 			return ConnectToLogcat(m)
-		}
+		}, func() tea.Msg {
+			return tui.MeasureCmd{}
+		})
 
 	case logcatConnectedMsg:
 		return m, func() tea.Msg {
@@ -348,82 +355,73 @@ func (m LogcatViewModel) View() string {
 func (m LogcatViewModel) headerView() string {
 	var filters []string
 	if !m.filter.IsEmpty() {
-		filters = append(filters, " | Filters:")
 		if m.filter.PackageName != "" {
-			filters = append(filters, fmt.Sprintf("[pkg:%s]", m.filter.PackageName))
+			filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName))
 		}
 		if m.filter.Level != "" && m.filter.Level != model.LvlV {
-			filters = append(filters, fmt.Sprintf("[level:%s]", m.filter.Level))
+			filters = append(filters, fmt.Sprintf("level:%s", m.filter.Level))
 		}
 		if m.filter.Tag != "" {
-			filters = append(filters, fmt.Sprintf("[tag:%s]", m.filter.Tag))
+			filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag))
 		}
 		if m.filter.Text != "" {
-			filters = append(filters, fmt.Sprintf("[text:%s]", m.filter.Text))
+			filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text))
 		}
 	}
 
-	var formats []string
-	var formatsStr string
+	format := m.format.Value()
+	var mods []string
+	var modsStr string
 
-	// Add single-choice format (only one should be true)
-	if m.format.Brief {
-		formats = append(formats, "brief")
-	} else if m.format.Long {
-		formats = append(formats, "long")
-	} else if m.format.Process {
-		formats = append(formats, "process")
-	} else if m.format.Raw {
-		formats = append(formats, "raw")
-	} else if m.format.Tag {
-		formats = append(formats, "tag")
-	} else if m.format.Thread {
-		formats = append(formats, "thread")
-	} else if m.format.Threadtime {
-		formats = append(formats, "threadtime")
-	} else if m.format.Time {
-		formats = append(formats, "time")
-	}
-
-	// Add multi-choice modifiers
 	if m.format.Color {
-		formats = append(formats, "color")
+		mods = append(mods, "color")
 	}
 	if m.format.Descriptive {
-		formats = append(formats, "descriptive")
+		mods = append(mods, "descriptive")
 	}
 	if m.format.Epoch {
-		formats = append(formats, "epoch")
+		mods = append(mods, "epoch")
 	}
 	if m.format.Monotonic {
-		formats = append(formats, "monotonic")
+		mods = append(mods, "monotonic")
 	}
 	if m.format.Printable {
-		formats = append(formats, "printable")
+		mods = append(mods, "printable")
 	}
 	if m.format.Uid {
-		formats = append(formats, "uid")
+		mods = append(mods, "uid")
 	}
 	if m.format.Usec {
-		formats = append(formats, "usec")
+		mods = append(mods, "usec")
 	}
 	if m.format.UTC {
-		formats = append(formats, "UTC")
+		mods = append(mods, "UTC")
 	}
 	if m.format.Year {
-		formats = append(formats, "year")
+		mods = append(mods, "year")
 	}
 	if m.format.Zone {
-		formats = append(formats, "zone")
+		mods = append(mods, "zone")
 	}
 
-	if len(formats) > 0 {
-		formatsStr = fmt.Sprintf(" | Formats: %s", strings.Join(formats, ","))
+	if len(mods) > 0 {
+		modsStr = fmt.Sprintf(" | %s", strings.Join(mods, ","))
 	}
 
-	title := titleStyle.Render(fmt.Sprintf("Device: %s%s%s", m.device.Name, strings.Join(filters, ""), formatsStr))
-	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
-	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
+	filtersStr := ""
+	if len(filters) > 0 {
+		filtersStr = fmt.Sprintf("\n%s", strings.Join(filters, " | "))
+	}
+
+	deviceName := lipgloss.NewStyle().Bold(true).Render(m.device.Name)
+	headerText := titleStyle.Render(fmt.Sprintf("%s | %s%s%s", deviceName, format, modsStr, filtersStr))
+	width := lipgloss.Width(headerText)
+
+	if width > m.viewport.Width {
+		headerText = titleStyle.Render(fmt.Sprintf("%s | ...", deviceName))
+	}
+
+	return headerText
 }
 
 func (m LogcatViewModel) footerView() string {
@@ -436,6 +434,9 @@ func (m LogcatViewModel) footerView() string {
 
 	help := lipgloss.NewStyle().
 		Foreground(theme.FGHelp).
+		Width(m.viewport.Width).
+		AlignHorizontal(lipgloss.Center).
+		Padding(1, 2, 0, 2).
 		Render(helpText)
 
 	return help

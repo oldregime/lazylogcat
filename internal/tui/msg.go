@@ -2,6 +2,8 @@ package tui
 
 import "github.com/parfenovvs/lazylogcat/internal/model"
 
+type MeasureCmd struct{}
+
 type NavigateToDevicesCmd struct{}
 
 type NavigateToLogcatCmd struct{}

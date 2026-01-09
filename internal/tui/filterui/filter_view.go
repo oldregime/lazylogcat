@@ -246,7 +246,6 @@ func (m FilterViewModel) View() string {
 	// Title
 	title := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(theme.FGTitle).
 		Render("Format Management")
 	b.WriteString(title + "\n\n")
 
@@ -290,8 +289,7 @@ func (m FilterViewModel) renderFormatPanel(height int) string {
 
 	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle)
+		Bold(true)
 
 	if m.activePanel == 0 {
 		// Active panel - use purple highlight
@@ -324,16 +322,15 @@ func (m FilterViewModel) renderFormatPanel(height int) string {
 	}
 
 	// Create bordered panel
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGBorder).
-		Padding(1, 2).
+	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width/2 - 4).
 		Height(height)
 
 	if m.activePanel == 0 {
 		// Active panel - highlight border
-		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
+		panelStyle = theme.ActivePanel().
+			Width(m.viewportSize.Width/2 - 4).
+			Height(height)
 	}
 
 	return panelStyle.Render(b.String())
@@ -344,8 +341,7 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 
 	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle)
+		Bold(true)
 
 	if m.activePanel == 1 {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
@@ -379,14 +375,12 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 	}
 
 	// Create bordered panel
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGBorder).
-		Padding(1, 2).
+	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width/2 - 4)
 
 	if m.activePanel == 1 {
-		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
+		panelStyle = theme.ActivePanel().
+			Width(m.viewportSize.Width/2 - 4)
 	}
 
 	result := b.String()
@@ -397,8 +391,7 @@ func (m FilterViewModel) renderPackagePanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle)
+		Bold(true)
 
 	if m.activePanel == 2 {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
@@ -414,14 +407,12 @@ func (m FilterViewModel) renderPackagePanel() string {
 		b.WriteString("\n\n" + errorStyle.Render(m.validationErr))
 	}
 
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGBorder).
-		Padding(1, 2).
+	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 2 {
-		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
+		panelStyle = theme.ActivePanel().
+			Width(m.viewportSize.Width - 8)
 	}
 
 	return panelStyle.Render(b.String())
@@ -431,8 +422,7 @@ func (m FilterViewModel) renderTagPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle)
+		Bold(true)
 
 	if m.activePanel == 3 {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
@@ -442,14 +432,12 @@ func (m FilterViewModel) renderTagPanel() string {
 
 	b.WriteString(m.tagInput.View())
 
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGBorder).
-		Padding(1, 2).
+	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 3 {
-		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
+		panelStyle = theme.ActivePanel().
+			Width(m.viewportSize.Width - 8)
 	}
 
 	return panelStyle.Render(b.String())
@@ -459,8 +447,7 @@ func (m FilterViewModel) renderTextPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.FGTitle)
+		Bold(true)
 
 	if m.activePanel == 4 {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
@@ -470,14 +457,12 @@ func (m FilterViewModel) renderTextPanel() string {
 
 	b.WriteString(m.textInput.View())
 
-	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.FGBorder).
-		Padding(1, 2).
+	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width - 8)
 
 	if m.activePanel == 4 {
-		panelStyle = panelStyle.BorderForeground(theme.FGActiveBorder)
+		panelStyle = theme.ActivePanel().
+			Width(m.viewportSize.Width - 8)
 	}
 
 	return panelStyle.Render(b.String())

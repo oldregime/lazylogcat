@@ -23,8 +23,9 @@ const (
 )
 
 type MainModel struct {
-	viewportSize model.Size
-	state        sessionState
+	windowSize model.Size
+
+	state sessionState
 
 	currentDevice *model.Device
 	filter        model.Filter
@@ -63,10 +64,10 @@ func InitMainModel(c config.Config) MainModel {
 
 	if m.currentDevice == nil {
 		m.state = devicesView
-		m.devicesView = devicesui.New()
+		m.devicesView = devicesui.New(m.windowSize)
 	} else {
 		m.state = logcatView
-		m.logcatView = logcatui.New(m.viewportSize, *m.currentDevice, m.filter, m.format)
+		m.logcatView = logcatui.New(m.windowSize, *m.currentDevice, m.filter, m.format)
 	}
 
 	return m
@@ -96,24 +97,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		m.viewportSize = model.Size{
+		m.windowSize = model.Size{
 			Width:  msg.Width,
 			Height: msg.Height,
 		}
-		resizeMsg := m.viewportSize
-		switch m.state {
-		case logcatView:
-			newLogcatViewing, newCmd := m.logcatView.Update(resizeMsg)
-			m.logcatView = newLogcatViewing
-			cmds = append(cmds, newCmd)
-		case filterView:
-			newFilterView, newCmd := m.filterView.Update(resizeMsg)
-			m.filterView = newFilterView
-			cmds = append(cmds, newCmd)
-		case devicesView:
-			newDevicesView, newCmd := m.devicesView.Update(resizeMsg)
-			m.devicesView = newDevicesView
-			cmds = append(cmds, newCmd)
+		return m, func() tea.Msg {
+			return m.windowSize
 		}
 
 	case devicesui.DeviceSelectedMsg:
@@ -125,7 +114,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToFilterCmd:
 		m.state = filterView
 		m.filterView = filterui.New(
-			m.viewportSize,
+			m.windowSize,
 			m.currentDevice.Id,
 			m.filter,
 			m.format,
@@ -142,7 +131,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
-		m.logcatView = logcatui.New(m.viewportSize, *m.currentDevice, m.filter, m.format)
+		m.logcatView = logcatui.New(m.windowSize, *m.currentDevice, m.filter, m.format)
 		return m, func() tea.Msg {
 			return tui.ReconnectLogcatCmd{}
 		}
@@ -150,9 +139,11 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToDevicesCmd:
 		logcatui.Close(&m.logcatView)
 		m.state = devicesView
-		return m, func() tea.Msg {
+		return m, tea.Batch(func() tea.Msg {
 			return devicesui.GetDevices(m.currentDevice)
-		}
+		}, func() tea.Msg {
+			return m.windowSize
+		})
 	}
 
 	switch m.state {
@@ -178,8 +169,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MainModel) View() string {
-	style = style.Width(m.viewportSize.Width).
-		Height(m.viewportSize.Height)
+	style = style.Width(m.windowSize.Width).
+		Height(m.windowSize.Height)
 
 	var content string
 
