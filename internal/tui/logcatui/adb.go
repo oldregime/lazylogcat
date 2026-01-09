@@ -15,6 +15,8 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
+// TODO move this functionality to util/adb.go
+
 const initialLogHistorySeconds = 60
 
 var cmd *exec.Cmd

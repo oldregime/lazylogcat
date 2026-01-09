@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -104,10 +103,6 @@ func (m *FilterViewModel) Exit(apply bool) (bool, error) {
 		}
 		if m.textInput.Focused() {
 			m.textInput.Blur()
-		}
-
-		if filterChanged || formatChanged {
-			saveConfigLocally(m.deviceId, m.filter, m.format)
 		}
 
 		return filterChanged || formatChanged, nil
@@ -658,26 +653,4 @@ func isModifierSelected(f *model.Format, field string) bool {
 		return f.Zone
 	}
 	return false
-}
-
-func saveConfigLocally(deviceId string, filter model.Filter, format model.Format) {
-	go func() {
-		c := config.Config{
-			Prefs: config.Prefs{
-				Format:    format.Value(),
-				Modifiers: format.Modifiers(),
-			},
-			Session: config.Session{
-				DeviceId: deviceId,
-				Pkg:      filter.PackageName,
-				Tag:      filter.Tag,
-				Txt:      filter.Text,
-			},
-		}
-
-		_, err := config.Save(&c)
-		if err != nil {
-			slog.Error("Failed to save config", "error", err)
-		}
-	}()
 }

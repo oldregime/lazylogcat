@@ -74,7 +74,10 @@ func InitMainModel(c config.Config) MainModel {
 
 func (m MainModel) Init() tea.Cmd {
 	return func() tea.Msg {
-		return devicesui.GetDevices(nil)
+		if m.state == devicesView {
+			return devicesui.GetDevices(nil)
+		}
+		return tui.ReconnectLogcatCmd{}
 	}
 }
 

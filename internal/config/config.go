@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 )
-
-const configFileName = ".lazylogcat.json"
 
 // Config represents the application's configuration structure.
 // It includes user preferences and session details.
@@ -46,40 +43,18 @@ func DefaultConfig() Config {
 	}
 }
 
-// Save writes the configuration to disk and returns the file path.
-func Save(c *Config) (string, error) {
-	j, err := json.MarshalIndent(c, "", "  ")
+func (c *Config) String() string {
+	data, err := json.Marshal(c)
 	if err != nil {
-		slog.Error("Failed to marshal config to JSON", "error", err)
-		return "", fmt.Errorf("failed to marshal config to JSON: %w", err)
+		return "{}"
 	}
-
-	err = os.WriteFile(configFileName, j, 0644)
-	if err != nil {
-		slog.Error("Failed to write config file", "error", err)
-		return "", fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	f, err := os.Open(configFileName)
-	if err != nil {
-		slog.Error("Failed to open config file for verification", "error", err)
-		return "", fmt.Errorf("failed to open config file for verification: %w", err)
-	}
-	defer f.Close()
-
-	absPath, err := filepath.Abs(f.Name())
-	if err != nil {
-		slog.Error("Failed to get absolute path of config file", "error", err)
-		return "", fmt.Errorf("failed to get absolute path of config file: %w", err)
-	}
-
-	return absPath, nil
+	return string(data)
 }
 
 // Load reads the configuration from the provided file.
 // If the file is invalid or cannot be read, it returns a default configuration and an error.
 func Load(file *os.File) (Config, error) {
-	var config Config
+	config := DefaultConfig()
 
 	decoder := json.NewDecoder(file)
 	err := decoder.Decode(&config)
