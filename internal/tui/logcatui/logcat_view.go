@@ -1,10 +1,8 @@
 package logcatui
 
 import (
-	"bufio"
 	"fmt"
 	"log/slog"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -61,9 +59,30 @@ type logcatErrorMsg struct {
 	Err error
 }
 
-type logcatConnectedMsg struct {
-	cmd     *exec.Cmd
-	scanner *bufio.Scanner
+type logcatConnectedMsg struct{}
+
+func readNextFilteredLine(m LogcatViewModel) tea.Msg {
+	for {
+		line, err := util.ReadNextLogLine()
+		if err != nil {
+			return logcatErrorMsg{Err: err}
+		}
+		if line == "" {
+			return nil // EOF
+		}
+
+		// Filter empty lines
+		if strings.Trim(line, "\n\r ") == "" {
+			continue
+		}
+
+		// Filter by text search
+		if m.filter.Text != "" && !strings.Contains(line, m.filter.Text) {
+			continue
+		}
+
+		return logcatLineMsg{Line: line}
+	}
 }
 
 func New(parentSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
@@ -220,16 +239,25 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 	case tui.ReconnectLogcatCmd:
-		Close(&m)
-		return m, tea.Batch(func() tea.Msg {
-			return ConnectToLogcat(m)
-		}, func() tea.Msg {
-			return tui.MeasureCmd{}
-		})
+		util.CloseLogcat()
+		m.log = nil
+
+		return m, tea.Batch(
+			func() tea.Msg {
+				err := util.ConnectLogcat(m.device.Id, m.filter, m.format)
+				if err != nil {
+					return logcatErrorMsg{Err: err}
+				}
+				return logcatConnectedMsg{}
+			},
+			func() tea.Msg {
+				return tui.MeasureCmd{}
+			},
+		)
 
 	case logcatConnectedMsg:
 		return m, func() tea.Msg {
-			return WaitForNextLine(m)
+			return readNextFilteredLine(m)
 		}
 
 	case logcatLineMsg:
@@ -254,11 +282,12 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 		return m, func() tea.Msg {
-			return WaitForNextLine(m)
+			return readNextFilteredLine(m)
 		}
 
 	case logcatErrorMsg:
 		m.err = msg.Err
+		util.CloseLogcat()
 		return m, nil
 	}
 
@@ -440,4 +469,9 @@ func (m LogcatViewModel) footerView() string {
 		Render(helpText)
 
 	return help
+}
+
+func Close(m *LogcatViewModel) {
+	util.CloseLogcat()
+	m.log = nil
 }

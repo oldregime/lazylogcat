@@ -6,3 +6,5 @@ debug.log
 .lazylogcat.json
 
 *.local.md
+
+.docs/

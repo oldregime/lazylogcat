@@ -1,15 +1,32 @@
 package util
 
 import (
+	"bufio"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
+const initialLogHistorySeconds = 60
+
 var (
-	ErrFailedToGetDevices = fmt.Errorf("failed to get connected devices")
+	ErrFailedToGetDevices     = fmt.Errorf("failed to get connected devices")
+	ErrFailedToStartLogcat    = fmt.Errorf("failed to start logcat process")
+	ErrFailedToGetStdoutPipe  = fmt.Errorf("failed to get stdout pipe")
+	ErrLogcatConnectionClosed = fmt.Errorf("logcat connection is closed")
+	ErrReadingLogcat          = fmt.Errorf("error reading logcat stream")
+)
+
+var (
+	logcatCmd           *exec.Cmd
+	logcatScanner       *bufio.Scanner
+	firstConnectionTime *time.Time
+	firstConnOnce       sync.Once
 )
 
 func GetConnectedDevices() ([]model.Device, error) {
@@ -44,4 +61,114 @@ func GetConnectedDevices() ([]model.Device, error) {
 	}
 
 	return devices, nil
+}
+
+func getFirstConnectionTime() *time.Time {
+	firstConnOnce.Do(func() {
+		t := time.Now()
+		firstConnectionTime = &t
+	})
+	return firstConnectionTime
+}
+
+func timeDiffInSeconds(start *time.Time, end *time.Time) int {
+	if start == nil || end == nil {
+		return -1
+	}
+	return int(end.Sub(*start).Seconds())
+}
+
+func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
+	now := time.Now()
+	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
+	t := max(diff, initialLogHistorySeconds)
+
+	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(t)}
+
+	if filter.PackageName != "" {
+		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
+		if err != nil {
+			return fmt.Errorf("failed to get pid by package name: %w", err)
+		}
+		if len(pidStr) > 0 {
+			args = append(args, fmt.Sprintf("--pid=%s", pidStr))
+		}
+	}
+
+	if format != (model.Format{}) {
+		args = append(args, "-v")
+		var formats []string
+
+		formatValue := format.Value()
+		if formatValue != "" {
+			formats = append(formats, formatValue)
+		}
+
+		formats = append(formats, format.Modifiers()...)
+
+		colorless := make([]string, 0, len(formats))
+		for _, f := range formats {
+			if f != "color" {
+				colorless = append(colorless, f)
+			}
+		}
+		formats = colorless
+
+		if len(formats) > 0 {
+			args = append(args, strings.Join(formats, ","))
+		}
+	}
+
+	tag := "*"
+	if filter.Tag != "" {
+		tag = filter.Tag
+		args = append(args, "-s")
+	}
+
+	lvl := filter.Level
+	if lvl == "" {
+		lvl = model.LvlD
+	}
+	args = append(args, fmt.Sprintf("%s:%s", tag, lvl))
+
+	cmd := exec.Command("adb", args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrFailedToGetStdoutPipe, err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("%w: %w", ErrFailedToStartLogcat, err)
+	}
+
+	logcatCmd = cmd
+	logcatScanner = bufio.NewScanner(stdout)
+
+	return nil
+}
+
+func ReadNextLogLine() (string, error) {
+	if logcatScanner == nil {
+		return "", ErrLogcatConnectionClosed
+	}
+
+	if logcatScanner.Scan() {
+		return logcatScanner.Text(), nil
+	}
+
+	if err := logcatScanner.Err(); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrReadingLogcat, err)
+	}
+
+	return "", nil
+}
+
+func CloseLogcat() error {
+	if logcatCmd != nil && logcatCmd.Process != nil {
+		logcatCmd.Process.Kill()
+		logcatCmd.Wait()
+		logcatCmd = nil
+	}
+	logcatScanner = nil
+	return nil
 }
