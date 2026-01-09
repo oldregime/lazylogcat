@@ -32,24 +32,13 @@ type LogcatViewModel struct {
 	device        model.Device
 	filter        model.Filter
 	format        model.Format
-	log           []message
+	log           *util.RingBuffer
 	visualMode    bool
 	currentLine   int
 	startSelected int
 	softWrap      bool // TODO wrap with prefs
 	err           error
 }
-
-type message struct {
-	text   string
-	source messageSource
-}
-
-type messageSource string
-
-const (
-	logcatMessage messageSource = "logcat"
-)
 
 type logcatLineMsg struct {
 	Line string
@@ -89,6 +78,7 @@ func New(parentSize model.Size, device model.Device, filter model.Filter, format
 	m := LogcatViewModel{
 		parentSize:    parentSize,
 		device:        device,
+		log:           util.NewRingBuffer(maxLogLines),
 		softWrap:      true,
 		startSelected: -1,
 		filter:        filter,
@@ -167,7 +157,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			m.visualMode = !m.visualMode
 			if m.visualMode {
 				m.viewport.GotoBottom()
-				m.currentLine = len(m.log) - 1
+				m.currentLine = m.log.Size - 1
 				m.Render()
 				return m, nil
 			}
@@ -201,20 +191,22 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			}
 
 		case "y":
-			if m.visualMode && m.currentLine >= 0 && m.currentLine < len(m.log) {
+			if m.visualMode && m.currentLine >= 0 && m.currentLine < m.log.Size {
 				var err error
 				if m.startSelected >= 0 {
-					min := min(m.currentLine, m.startSelected)
-					max := max(m.currentLine, m.startSelected)
+					start := min(m.currentLine, m.startSelected)
+					end := max(m.currentLine, m.startSelected)
 					var lines []string
-					for i := min; i <= max; i++ {
-						lines = append(lines, strings.TrimSpace(m.log[i].text))
+					logs := m.log.Recent(m.log.Size - start)
+					for i := 0; i <= end-start; i++ {
+						lines = append(lines, strings.TrimSpace(logs[i]))
 					}
 					err = util.CopyToClipboard(lines...)
 					m.startSelected = -1
 					m.Render()
 				} else {
-					lineText := strings.TrimSpace(m.log[m.currentLine].text)
+					logs := m.log.Recent(m.log.Size - m.currentLine)
+					lineText := strings.TrimSpace(logs[0])
 					err = util.CopyToClipboard(lineText)
 				}
 				if err != nil {
@@ -224,7 +216,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, nil
 
 		case "j", "down":
-			if m.visualMode && m.currentLine < len(m.log)-1 {
+			if m.visualMode && m.currentLine < m.log.Size-1 {
 				m.currentLine++
 				m.Render()
 				m.ensureLineVisible()
@@ -240,7 +232,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	case tui.ReconnectLogcatCmd:
 		util.CloseLogcat()
-		m.log = nil
+		m.log = util.NewRingBuffer(maxLogLines)
 
 		return m, tea.Batch(
 			func() tea.Msg {
@@ -267,14 +259,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 		wasAtBottom := m.viewport.AtBottom()
 
-		if len(m.log) >= maxLogLines {
-			m.log = m.log[1:]
-		}
-		m.log = append(m.log, message{
-			text:   msg.Line + "\n",
-			source: logcatMessage,
-		})
-
+		m.log.Append(msg.Line + "\n")
 		m.Render()
 
 		if wasAtBottom {
@@ -301,7 +286,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 func (m *LogcatViewModel) Render() {
 	var b strings.Builder
-	for i, msg := range m.log {
+	logs := m.log.All()
+	for i, msg := range logs {
 		if m.visualMode {
 			selected := false
 			if m.startSelected >= 0 {
@@ -311,7 +297,7 @@ func (m *LogcatViewModel) Render() {
 			} else if i == m.currentLine {
 				selected = true
 			}
-			line := strings.TrimSuffix(msg.text, "\n")
+			line := strings.TrimSuffix(msg, "\n")
 			if selected {
 				styled := lipgloss.NewStyle().
 					Bold(true).
@@ -325,14 +311,14 @@ func (m *LogcatViewModel) Render() {
 			}
 		}
 		if m.format.Color {
-			line := strings.TrimSuffix(msg.text, "\n")
+			line := strings.TrimSuffix(msg, "\n")
 			styled := lipgloss.NewStyle().
 				Foreground(theme.GetLogColor(util.GetLogLevel(line))).
 				Width(m.viewport.Width).
 				Render(line)
 			b.WriteString(styled)
 		} else {
-			b.WriteString(msg.text)
+			b.WriteString(msg)
 		}
 	}
 	wrapped := b.String()
@@ -343,16 +329,17 @@ func (m *LogcatViewModel) Render() {
 }
 
 func (m *LogcatViewModel) ensureLineVisible() {
-	if !m.visualMode || m.currentLine < 0 || m.currentLine >= len(m.log) {
+	if !m.visualMode || m.currentLine < 0 || m.currentLine >= m.log.Size {
 		return
 	}
 
 	min := min(m.currentLine, m.startSelected)
 	max := max(m.currentLine, m.startSelected)
 
+	logs := m.log.All()
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
-		line := strings.TrimSuffix(m.log[i].text, "\n")
+		line := strings.TrimSuffix(logs[i], "\n")
 		if m.softWrap || (m.startSelected != -1 && i >= min && i <= max) {
 			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
 		} else {
@@ -473,5 +460,5 @@ func (m LogcatViewModel) footerView() string {
 
 func Close(m *LogcatViewModel) {
 	util.CloseLogcat()
-	m.log = nil
+	m.log = util.NewRingBuffer(maxLogLines)
 }

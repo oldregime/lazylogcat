@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -79,11 +78,11 @@ func timeDiffInSeconds(start *time.Time, end *time.Time) int {
 }
 
 func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
-	now := time.Now()
-	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
-	t := max(diff, initialLogHistorySeconds)
+	// now := time.Now()
+	// diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
+	// t := max(diff, initialLogHistorySeconds)
 
-	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(t)}
+	args := []string{"-s", deviceId, "logcat"} //, "-T", strconv.Itoa(t)}
 
 	if filter.PackageName != "" {
 		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
