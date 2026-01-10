@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +16,8 @@ import (
 )
 
 const maxLogLines = 1000
+const batchSize = 1 // TODO increase batch size with introducing timed out batches
+const batchTimeout = 100 * time.Millisecond
 
 var (
 	titleStyle = func() lipgloss.Style {
@@ -40,8 +43,8 @@ type LogcatViewModel struct {
 	err           error
 }
 
-type logcatLineMsg struct {
-	Line string
+type logcatBatchMsg struct {
+	Lines []string
 }
 
 type logcatErrorMsg struct {
@@ -50,8 +53,9 @@ type logcatErrorMsg struct {
 
 type logcatConnectedMsg struct{}
 
-func readNextFilteredLine(m LogcatViewModel) tea.Msg {
-	for {
+func readNextFilteredBatch(m LogcatViewModel) tea.Msg {
+	batch := make([]string, 0, batchSize)
+	for range batchSize {
 		line, err := util.ReadNextLogLine()
 		if err != nil {
 			return logcatErrorMsg{Err: err}
@@ -70,8 +74,9 @@ func readNextFilteredLine(m LogcatViewModel) tea.Msg {
 			continue
 		}
 
-		return logcatLineMsg{Line: line}
+		batch = append(batch, line)
 	}
+	return logcatBatchMsg{Lines: batch}
 }
 
 func New(parentSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
@@ -249,17 +254,19 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	case logcatConnectedMsg:
 		return m, func() tea.Msg {
-			return readNextFilteredLine(m)
+			return readNextFilteredBatch(m)
 		}
 
-	case logcatLineMsg:
+	case logcatBatchMsg:
 		if m.visualMode {
 			return m, nil
 		}
 
 		wasAtBottom := m.viewport.AtBottom()
 
-		m.log.Append(msg.Line + "\n")
+		for _, line := range msg.Lines {
+			m.log.Append(line + "\n")
+		}
 		m.Render()
 
 		if wasAtBottom {
@@ -267,7 +274,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 		return m, func() tea.Msg {
-			return readNextFilteredLine(m)
+			return readNextFilteredBatch(m)
 		}
 
 	case logcatErrorMsg:

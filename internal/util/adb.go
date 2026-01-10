@@ -3,7 +3,9 @@ package util
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -78,11 +80,11 @@ func timeDiffInSeconds(start *time.Time, end *time.Time) int {
 }
 
 func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
-	// now := time.Now()
-	// diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
-	// t := max(diff, initialLogHistorySeconds)
+	now := time.Now()
+	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
+	t := max(diff, initialLogHistorySeconds)
 
-	args := []string{"-s", deviceId, "logcat"} //, "-T", strconv.Itoa(t)}
+	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(t)}
 
 	if filter.PackageName != "" {
 		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
@@ -129,6 +131,8 @@ func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) er
 		lvl = model.LvlD
 	}
 	args = append(args, fmt.Sprintf("%s:%s", tag, lvl))
+
+	slog.Debug("Executing adb logcat command", "args", args)
 
 	cmd := exec.Command("adb", args...)
 	stdout, err := cmd.StdoutPipe()
