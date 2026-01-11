@@ -39,7 +39,7 @@ type LogcatViewModel struct {
 	visualMode    bool
 	currentLine   int
 	startSelected int
-	softWrap      bool // TODO wrap with prefs
+	softWrap      bool
 	err           error
 }
 
@@ -319,11 +319,14 @@ func (m *LogcatViewModel) Render() {
 		}
 		if m.format.Color {
 			line := strings.TrimSuffix(msg, "\n")
-			styled := lipgloss.NewStyle().
-				Foreground(theme.GetLogColor(util.GetLogLevel(line, m.format))).
-				Width(m.viewport.Width).
-				Render(line)
+			style := lipgloss.NewStyle().
+				Foreground(theme.GetLogColor(util.GetLogLevel(line, m.format)))
+			if m.softWrap {
+				style = style.Width(m.viewport.Width)
+			}
+			styled := style.Render(line)
 			b.WriteString(styled)
+			b.WriteString("\n")
 		} else {
 			b.WriteString(msg)
 		}
