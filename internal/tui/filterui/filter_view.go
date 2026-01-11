@@ -33,24 +33,26 @@ type FilterViewModel struct {
 }
 
 func New(viewportSize model.Size, deviceId string, filter model.Filter, format model.Format) FilterViewModel {
+	inputWidth := (viewportSize.Width-12)/3 - 4 // Account for panel padding
+
 	pi := textinput.New()
-	pi.Placeholder = "Enter package name..."
+	pi.Placeholder = "Package name..."
 	pi.CharLimit = 100
-	pi.Width = viewportSize.Width - 20
+	pi.Width = inputWidth
 	pi.SetValue(filter.PackageName)
 	pi.Blur()
 
 	tagInput := textinput.New()
-	tagInput.Placeholder = "Enter tag value..."
+	tagInput.Placeholder = "Tag value..."
 	tagInput.CharLimit = 100
-	tagInput.Width = viewportSize.Width - 20
+	tagInput.Width = inputWidth
 	tagInput.SetValue(filter.Tag)
 	tagInput.Blur()
 
 	txtInput := textinput.New()
-	txtInput.Placeholder = "Enter text to search..."
+	txtInput.Placeholder = "Search text..."
 	txtInput.CharLimit = 100
-	txtInput.Width = viewportSize.Width - 20
+	txtInput.Width = inputWidth
 	txtInput.SetValue(filter.Text)
 	txtInput.Blur()
 
@@ -128,9 +130,10 @@ func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case model.Size:
 		m.viewportSize = msg
-		m.packageInput.Width = msg.Width - 20
-		m.tagInput.Width = msg.Width - 20
-		m.textInput.Width = msg.Width - 20
+		inputWidth := (msg.Width-12)/3 - 4
+		m.packageInput.Width = inputWidth
+		m.tagInput.Width = inputWidth
+		m.textInput.Width = inputWidth
 
 	case tea.KeyMsg:
 		if m.activePanel == 0 || m.activePanel == 1 {
@@ -243,38 +246,32 @@ func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 func (m FilterViewModel) View() string {
 	var b strings.Builder
 
-	// Title
 	title := lipgloss.NewStyle().
 		Bold(true).
-		Render("Format Management")
+		Render("Filter & Format Settings")
 	b.WriteString(title + "\n\n")
 
-	// Two panels side-by-side
 	modifierPanel, modifierPanelHeight := m.renderModifierPanel()
 	formatPanel := m.renderFormatPanel(modifierPanelHeight)
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, formatPanel, "  ", modifierPanel)
 	b.WriteString(panels + "\n\n")
 
-	// Package panel below (full width)
-	packagePanel := m.renderPackagePanel()
-	b.WriteString(packagePanel + "\n\n")
+	// Calculate equal width for three filter panels
+	filterPanelWidth := (m.viewportSize.Width - 12) / 3 // 12 for spacing (2 gaps * 2 spaces + 4*2 padding)
 
-	// Tag panel below (full width)
-	tagPanel := m.renderTagPanel()
-	b.WriteString(tagPanel + "\n\n")
+	packagePanel := m.renderPackagePanel(filterPanelWidth)
+	tagPanel := m.renderTagPanel(filterPanelWidth)
+	textPanel := m.renderTextPanel(filterPanelWidth)
 
-	// Text panel below (full width)
-	textPanel := m.renderTextPanel()
-	b.WriteString(textPanel + "\n\n")
+	filterPanels := lipgloss.JoinHorizontal(lipgloss.Top, packagePanel, "  ", tagPanel, "  ", textPanel)
+	b.WriteString(filterPanels + "\n")
 
-	// Help text
 	help := lipgloss.NewStyle().
 		Foreground(theme.FGHelp).
 		AlignHorizontal(lipgloss.Center).
 		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc back • ctrl+s apply")
 	b.WriteString(help)
 
-	// Center everything
 	return lipgloss.Place(
 		m.viewportSize.Width,
 		m.viewportSize.Height,
@@ -287,18 +284,15 @@ func (m FilterViewModel) View() string {
 func (m FilterViewModel) renderFormatPanel(height int) string {
 	var b strings.Builder
 
-	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true)
 
 	if m.activePanel == 0 {
-		// Active panel - use purple highlight
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
 	b.WriteString(panelTitleStyle.Render("Format") + "\n\n")
 
-	// Format options
 	formats := []struct {
 		name  string
 		field string
@@ -321,13 +315,11 @@ func (m FilterViewModel) renderFormatPanel(height int) string {
 		b.WriteString(line + "\n")
 	}
 
-	// Create bordered panel
 	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width/2 - 4).
 		Height(height)
 
 	if m.activePanel == 0 {
-		// Active panel - highlight border
 		panelStyle = theme.ActivePanel().
 			Width(m.viewportSize.Width/2 - 4).
 			Height(height)
@@ -339,7 +331,6 @@ func (m FilterViewModel) renderFormatPanel(height int) string {
 func (m FilterViewModel) renderModifierPanel() (string, int) {
 	var b strings.Builder
 
-	// Panel title
 	panelTitleStyle := lipgloss.NewStyle().
 		Bold(true)
 
@@ -349,7 +340,6 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 
 	b.WriteString(panelTitleStyle.Render("Modifiers") + "\n\n")
 
-	// Modifier options
 	modifiers := []struct {
 		name  string
 		field string
@@ -374,7 +364,6 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 		b.WriteString(line + "\n")
 	}
 
-	// Create bordered panel
 	panelStyle := theme.Panel().
 		Width(m.viewportSize.Width/2 - 4)
 
@@ -387,7 +376,7 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 	return panelStyle.Render(result), lipgloss.Height(result) + 2
 }
 
-func (m FilterViewModel) renderPackagePanel() string {
+func (m FilterViewModel) renderPackagePanel(width int) string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -397,7 +386,7 @@ func (m FilterViewModel) renderPackagePanel() string {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
-	b.WriteString(panelTitleStyle.Render("Package Filter") + "\n\n")
+	b.WriteString(panelTitleStyle.Render("Package") + "\n\n")
 
 	b.WriteString(m.packageInput.View())
 
@@ -408,17 +397,17 @@ func (m FilterViewModel) renderPackagePanel() string {
 	}
 
 	panelStyle := theme.Panel().
-		Width(m.viewportSize.Width - 8)
+		Width(width)
 
 	if m.activePanel == 2 {
 		panelStyle = theme.ActivePanel().
-			Width(m.viewportSize.Width - 8)
+			Width(width)
 	}
 
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterViewModel) renderTagPanel() string {
+func (m FilterViewModel) renderTagPanel(width int) string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -428,22 +417,22 @@ func (m FilterViewModel) renderTagPanel() string {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
-	b.WriteString(panelTitleStyle.Render("Tag Filter (exact match)") + "\n\n")
+	b.WriteString(panelTitleStyle.Render("Tag") + "\n\n")
 
 	b.WriteString(m.tagInput.View())
 
 	panelStyle := theme.Panel().
-		Width(m.viewportSize.Width - 8)
+		Width(width)
 
 	if m.activePanel == 3 {
 		panelStyle = theme.ActivePanel().
-			Width(m.viewportSize.Width - 8)
+			Width(width)
 	}
 
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterViewModel) renderTextPanel() string {
+func (m FilterViewModel) renderTextPanel(width int) string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -453,16 +442,16 @@ func (m FilterViewModel) renderTextPanel() string {
 		panelTitleStyle = panelTitleStyle.Foreground(theme.FGActiveTitle)
 	}
 
-	b.WriteString(panelTitleStyle.Render("Text Filter (substring match)") + "\n\n")
+	b.WriteString(panelTitleStyle.Render("Text") + "\n\n")
 
 	b.WriteString(m.textInput.View())
 
 	panelStyle := theme.Panel().
-		Width(m.viewportSize.Width - 8)
+		Width(width)
 
 	if m.activePanel == 4 {
 		panelStyle = theme.ActivePanel().
-			Width(m.viewportSize.Width - 8)
+			Width(width)
 	}
 
 	return panelStyle.Render(b.String())
