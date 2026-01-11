@@ -320,7 +320,7 @@ func (m *LogcatViewModel) Render() {
 		if m.format.Color {
 			line := strings.TrimSuffix(msg, "\n")
 			styled := lipgloss.NewStyle().
-				Foreground(theme.GetLogColor(util.GetLogLevel(line))).
+				Foreground(theme.GetLogColor(util.GetLogLevel(line, m.format))).
 				Width(m.viewport.Width).
 				Render(line)
 			b.WriteString(styled)
