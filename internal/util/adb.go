@@ -3,6 +3,7 @@ package util
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os/exec"
 	"strconv"
@@ -163,7 +164,7 @@ func ReadNextLogLine() (string, error) {
 		return "", fmt.Errorf("%w: %w", ErrReadingLogcat, err)
 	}
 
-	return "", nil
+	return "", io.EOF
 }
 
 func CloseLogcat() error {

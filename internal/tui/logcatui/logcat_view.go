@@ -1,7 +1,9 @@
 package logcatui
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -58,14 +60,14 @@ func readNextFilteredBatch(m LogcatViewModel) tea.Msg {
 	for range batchSize {
 		line, err := util.ReadNextLogLine()
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil // End of stream
+			}
 			return logcatErrorMsg{Err: err}
 		}
-		if line == "" {
-			return nil // EOF
-		}
 
-		// Filter empty lines
-		if strings.Trim(line, "\n\r ") == "" {
+		// Filter empty lines (allowed in long format)
+		if !m.format.Long && strings.Trim(line, "\n\r ") == "" {
 			continue
 		}
 
