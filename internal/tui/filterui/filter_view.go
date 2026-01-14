@@ -251,8 +251,8 @@ func (m FilterViewModel) View() string {
 		Render("Filter & Format Settings")
 	b.WriteString(title + "\n\n")
 
-	modifierPanel, modifierPanelHeight := m.renderModifierPanel()
-	formatPanel := m.renderFormatPanel(modifierPanelHeight)
+	modifierPanel := m.renderModifierPanel()
+	formatPanel := m.renderFormatPanel()
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, formatPanel, "  ", modifierPanel)
 	b.WriteString(panels + "\n\n")
 
@@ -264,12 +264,12 @@ func (m FilterViewModel) View() string {
 	textPanel := m.renderTextPanel(filterPanelWidth)
 
 	filterPanels := lipgloss.JoinHorizontal(lipgloss.Top, packagePanel, "  ", tagPanel, "  ", textPanel)
-	b.WriteString(filterPanels + "\n")
+	b.WriteString(filterPanels + "\n\n")
 
 	help := lipgloss.NewStyle().
 		Foreground(theme.FGHelp).
 		AlignHorizontal(lipgloss.Center).
-		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select\nesc back • ctrl+s apply")
+		Render("tab switch panels • ↑/k up • ↓/j down • space/enter select • esc back • ctrl+s apply")
 	b.WriteString(help)
 
 	return lipgloss.Place(
@@ -281,7 +281,7 @@ func (m FilterViewModel) View() string {
 	)
 }
 
-func (m FilterViewModel) renderFormatPanel(height int) string {
+func (m FilterViewModel) renderFormatPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -312,23 +312,29 @@ func (m FilterViewModel) renderFormatPanel(height int) string {
 		cursor := m.activePanel == 0 && m.formatCursor == i
 
 		line := m.renderRadioButton(fmt.name, selected, cursor)
-		b.WriteString(line + "\n")
+		b.WriteString(line)
+		if i < len(formats)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	hCompensator := model.MaxModifiers - len(formats)
+	for range hCompensator {
+		b.WriteString("\n")
 	}
 
 	panelStyle := theme.Panel().
-		Width(m.viewportSize.Width/2 - 4).
-		Height(height)
+		Width(m.viewportSize.Width/2 - 4)
 
 	if m.activePanel == 0 {
 		panelStyle = theme.ActivePanel().
-			Width(m.viewportSize.Width/2 - 4).
-			Height(height)
+			Width(m.viewportSize.Width/2 - 4)
 	}
 
 	return panelStyle.Render(b.String())
 }
 
-func (m FilterViewModel) renderModifierPanel() (string, int) {
+func (m FilterViewModel) renderModifierPanel() string {
 	var b strings.Builder
 
 	panelTitleStyle := lipgloss.NewStyle().
@@ -361,7 +367,10 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 		cursor := m.activePanel == 1 && m.modifierCursor == i
 
 		line := m.renderCheckbox(mod.name, selected, cursor)
-		b.WriteString(line + "\n")
+		b.WriteString(line)
+		if i < len(modifiers)-1 {
+			b.WriteString("\n")
+		}
 	}
 
 	panelStyle := theme.Panel().
@@ -373,7 +382,7 @@ func (m FilterViewModel) renderModifierPanel() (string, int) {
 	}
 
 	result := b.String()
-	return panelStyle.Render(result), lipgloss.Height(result) + 2
+	return panelStyle.Render(result)
 }
 
 func (m FilterViewModel) renderPackagePanel(width int) string {

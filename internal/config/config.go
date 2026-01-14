@@ -31,7 +31,7 @@ type Session struct {
 func DefaultConfig() Config {
 	return Config{
 		Prefs: Prefs{
-			Format:    "brief",
+			Format:    "time",
 			Modifiers: []string{"color"},
 		},
 		Session: Session{

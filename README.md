@@ -43,8 +43,8 @@ lazylogcat --debug
 
 *Filtering & Display:*
 - `Ctrl+f` - Open filter management (package, tag, text, log level, format options)
-- `Alt+w` - Toggle soft wrap
-- `Alt+l` - Cycle through log priority levels (V→D→I→W→E→F)
+- `Ctrl+w` - Toggle soft wrap
+- `Ctrl+l` - Cycle through log priority levels (V→D→I→W→E→F)
 
 *Visual Mode & Copying:*
 - `v` - Enter/exit visual mode

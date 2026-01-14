@@ -27,7 +27,7 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • alt+w toggle wrap • alt+l toggle level • G jump to recent • v visual"
+	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • W toggle wrap • L toggle level • G jump to recent • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
@@ -125,6 +125,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+r":
+			m.visualMode = false
 			return m, func() tea.Msg {
 				return tui.ReconnectLogcatCmd{}
 			}
@@ -139,7 +140,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 				return tui.NavigateToFilterCmd{}
 			}
 
-		case "alt+w":
+		case "W":
 			if !m.visualMode {
 				m.softWrap = !m.softWrap
 				return m, func() tea.Msg {
@@ -152,7 +153,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			m.viewport.GotoBottom()
 			return m, nil
 
-		case "alt+l":
+		case "L":
 			if !m.visualMode {
 				m.filter.Level = m.filter.Level.Next()
 				return m, func() tea.Msg {
@@ -464,7 +465,7 @@ func (m LogcatViewModel) footerView() string {
 		Foreground(theme.FGHelp).
 		Width(m.viewport.Width).
 		AlignHorizontal(lipgloss.Center).
-		Padding(1, 2, 0, 2).
+		Padding(0, 2).
 		Render(helpText)
 
 	return help

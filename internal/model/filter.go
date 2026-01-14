@@ -2,6 +2,8 @@ package model
 
 import "strings"
 
+const MaxModifiers = 10
+
 type Level string
 
 const (
@@ -54,7 +56,7 @@ func (f *Filter) IsEmpty() bool {
 }
 
 func (l Level) Next() Level {
-	if l == "" || l == LvlF {
+	if l == LvlF {
 		return LvlV
 	}
 
@@ -84,7 +86,7 @@ func (f *Format) Value() string {
 	case f.Time:
 		return "time"
 	default:
-		return ""
+		return "time"
 	}
 }
 

@@ -75,7 +75,7 @@ func Panel() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(FGBorder).
-		Padding(1, 2)
+		Padding(0, 1)
 }
 
 // ActivePanel returns a panel style with active border highlighting

@@ -59,7 +59,7 @@ func (m DevicesViewModel) Update(msg tea.Msg) (DevicesViewModel, tea.Cmd) {
 			}
 			return m, nil
 
-		case "enter":
+		case "enter", " ":
 			if len(m.devices) > 0 && m.cursor < len(m.devices) {
 				selectedDevice := m.devices[m.cursor]
 				return m, func() tea.Msg {
@@ -200,7 +200,7 @@ func (m DevicesViewModel) renderDevicePanelWithHelp() string {
 		Foreground(theme.FGHelp).
 		Width(m.parentSize.Width/2 - 4).
 		AlignHorizontal(lipgloss.Center).
-		Render("↑/k up • ↓/j down • enter select • r refresh • ctrl+c quit")
+		Render("↑/k up • ↓/j down • enter/space select • r refresh • ctrl+c quit")
 
 	b.WriteString(help)
 
