@@ -88,6 +88,10 @@ lazylogcat --config config.json
 lazylogcat --debug
 ```
 
+### Tips
+
+- Select with mouse requires holding `Shift` key in some terminal emulators
+
 ## Configuration
 
 lazylogcat can be customized using a JSON configuration file.
