@@ -1,5 +1,9 @@
 # lazylogcat
 
+[![Build Status](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml/badge.svg?branch=trunk)](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml)
+[![Go Version](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/parfenovvs/lazylogcat)](https://github.com/parfenovvs/lazylogcat/releases/latest)
+
 A TUI for viewing Android logcat logs.
 
 <table>
