@@ -75,8 +75,8 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Test Prefs defaults
 	t.Run("Prefs", func(t *testing.T) {
-		if got.Prefs.Format != "brief" {
-			t.Errorf("Prefs.Format = %q, want %q", got.Prefs.Format, "brief")
+		if got.Prefs.Format != "time" {
+			t.Errorf("Prefs.Format = %q, want %q", got.Prefs.Format, "time")
 		}
 		wantModifiers := []string{"color"}
 		if !slicesEqual(got.Prefs.Modifiers, wantModifiers) {
@@ -108,7 +108,6 @@ func TestDefaultConfig(t *testing.T) {
 	})
 }
 
-
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -119,7 +118,7 @@ func TestLoadConfig(t *testing.T) {
 			name: "ValidDefaultConfig",
 			jsonData: `{
   "preferences": {
-    "log_format": "brief",
+    "log_format": "time",
     "log_modifiers": ["color"]
   },
   "session": {
@@ -160,14 +159,14 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			name:       "CompactJSON",
-			jsonData:   `{"preferences":{"log_format":"brief","log_modifiers":["color"]},"session":{"device_id":"","package_name":"","log_tag":"","log_text":""}}`,
+			jsonData:   `{"preferences":{"log_format":"time","log_modifiers":["color"]},"session":{"device_id":"","package_name":"","log_tag":"","log_text":""}}`,
 			wantConfig: DefaultConfig(),
 		},
 		{
 			name: "EmptyModifiersArray",
 			jsonData: `{
   "preferences": {
-    "log_format": "brief",
+    "log_format": "time",
     "log_modifiers": []
   },
   "session": {
@@ -179,7 +178,7 @@ func TestLoadConfig(t *testing.T) {
 }`,
 			wantConfig: Config{
 				Prefs: Prefs{
-					Format:    "brief",
+					Format:    "time",
 					Modifiers: []string{},
 				},
 				Session: Session{
@@ -263,7 +262,7 @@ func TestLoadConfig_ErrorCases(t *testing.T) {
 			name: "ExtraFields",
 			jsonData: `{
   "preferences": {
-    "log_format": "brief",
+    "log_format": "time",
     "log_modifiers": ["color"],
     "extra_field": "should be ignored"
   },
@@ -356,4 +355,3 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 		}
 	})
 }
-

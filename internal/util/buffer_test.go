@@ -17,8 +17,8 @@ func TestNewRingBuffer(t *testing.T) {
 		if buffer.capacity != 3 {
 			t.Errorf("Expected %v, got %v", 3, buffer.capacity)
 		}
-		if buffer.size != 0 {
-			t.Errorf("Expected size 0, got %v", buffer.size)
+		if buffer.Size != 0 {
+			t.Errorf("Expected size 0, got %v", buffer.Size)
 		}
 		if buffer.head != 0 {
 			t.Errorf("Expected head 0, got %v", buffer.head)
@@ -34,8 +34,8 @@ func TestAppend(t *testing.T) {
 		buffer := NewRingBuffer(3)
 		buffer.Append("A")
 		buffer.Append("B")
-		if buffer.size != 2 {
-			t.Errorf("Expected size 2, got %v", buffer.size)
+		if buffer.Size != 2 {
+			t.Errorf("Expected size 2, got %v", buffer.Size)
 		}
 		if buffer.head != 2 {
 			t.Errorf("Expected head 2, got %v", buffer.head)
@@ -53,8 +53,8 @@ func TestAppend(t *testing.T) {
 		buffer.Append("A")
 		buffer.Append("B")
 		buffer.Append("C")
-		if buffer.size != 2 {
-			t.Errorf("Expected size 2, got %v", buffer.size)
+		if buffer.Size != 2 {
+			t.Errorf("Expected size 2, got %v", buffer.Size)
 		}
 		if buffer.head != 1 {
 			t.Errorf("Expected head 1, got %v", buffer.head)

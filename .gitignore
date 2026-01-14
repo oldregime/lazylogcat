@@ -1,9 +1,10 @@
 lazylogcat
 
-debug.log
 .lazylogcat.log
 config.json
 
 *.local.md
+
+AGENTS.md
 
 .docs/
