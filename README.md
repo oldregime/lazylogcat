@@ -106,3 +106,7 @@ This project wouldn't exist without these incredible open source projects:
 - **[Lip Gloss](https://github.com/charmbracelet/lipgloss)** by Charm
 - **[Cobra](https://github.com/spf13/cobra)** by spf13
 - **[clipboard](https://github.com/atotto/clipboard)** by atotto
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
