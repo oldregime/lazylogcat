@@ -17,8 +17,8 @@ func TestNewRingBuffer(t *testing.T) {
 		if buffer.capacity != 3 {
 			t.Errorf("Expected %v, got %v", 3, buffer.capacity)
 		}
-		if buffer.Size != 0 {
-			t.Errorf("Expected size 0, got %v", buffer.Size)
+		if buffer.Size() != 0 {
+			t.Errorf("Expected size 0, got %v", buffer.Size())
 		}
 		if buffer.head != 0 {
 			t.Errorf("Expected head 0, got %v", buffer.head)
@@ -34,8 +34,8 @@ func TestAppend(t *testing.T) {
 		buffer := NewRingBuffer(3)
 		buffer.Append("A")
 		buffer.Append("B")
-		if buffer.Size != 2 {
-			t.Errorf("Expected size 2, got %v", buffer.Size)
+		if buffer.Size() != 2 {
+			t.Errorf("Expected size 2, got %v", buffer.Size())
 		}
 		if buffer.head != 2 {
 			t.Errorf("Expected head 2, got %v", buffer.head)
@@ -53,8 +53,8 @@ func TestAppend(t *testing.T) {
 		buffer.Append("A")
 		buffer.Append("B")
 		buffer.Append("C")
-		if buffer.Size != 2 {
-			t.Errorf("Expected size 2, got %v", buffer.Size)
+		if buffer.Size() != 2 {
+			t.Errorf("Expected size 2, got %v", buffer.Size())
 		}
 		if buffer.head != 1 {
 			t.Errorf("Expected head 1, got %v", buffer.head)
@@ -141,4 +141,92 @@ func TestGetAll(t *testing.T) {
 			t.Errorf("At index %d, expected %v, got %v", i, v, all[i])
 		}
 	}
+}
+
+func TestSize(t *testing.T) {
+	t.Run("EmptyBuffer", func(t *testing.T) {
+		buffer := NewRingBuffer(5)
+		if buffer.Size() != 0 {
+			t.Errorf("Expected size 0, got %v", buffer.Size())
+		}
+	})
+
+	t.Run("AfterAppend", func(t *testing.T) {
+		buffer := NewRingBuffer(5)
+		buffer.Append("A")
+		if buffer.Size() != 1 {
+			t.Errorf("Expected size 1, got %v", buffer.Size())
+		}
+		buffer.Append("B")
+		buffer.Append("C")
+		if buffer.Size() != 3 {
+			t.Errorf("Expected size 3, got %v", buffer.Size())
+		}
+	})
+
+	t.Run("AfterExceedingCapacity", func(t *testing.T) {
+		buffer := NewRingBuffer(3)
+		buffer.Append("A")
+		buffer.Append("B")
+		buffer.Append("C")
+		buffer.Append("D")
+		buffer.Append("E")
+		if buffer.Size() != 3 {
+			t.Errorf("Expected size 3 (capacity), got %v", buffer.Size())
+		}
+	})
+}
+
+func TestClear(t *testing.T) {
+	t.Run("ClearEmptyBuffer", func(t *testing.T) {
+		buffer := NewRingBuffer(3)
+		buffer.Clear()
+		if buffer.Size() != 0 {
+			t.Errorf("Expected size 0, got %v", buffer.Size())
+		}
+		all := buffer.All()
+		if len(all) != 0 {
+			t.Errorf("Expected empty slice after clear, got %v", all)
+		}
+	})
+
+	t.Run("ClearNonEmptyBuffer", func(t *testing.T) {
+		buffer := NewRingBuffer(3)
+		buffer.Append("A")
+		buffer.Append("B")
+		buffer.Append("C")
+		if buffer.Size() != 3 {
+			t.Errorf("Expected size 3 before clear, got %v", buffer.Size())
+		}
+		buffer.Clear()
+		if buffer.Size() != 0 {
+			t.Errorf("Expected size 0 after clear, got %v", buffer.Size())
+		}
+		all := buffer.All()
+		if len(all) != 0 {
+			t.Errorf("Expected empty slice after clear, got %v", all)
+		}
+	})
+
+	t.Run("AppendAfterClear", func(t *testing.T) {
+		buffer := NewRingBuffer(3)
+		buffer.Append("A")
+		buffer.Append("B")
+		buffer.Clear()
+		buffer.Append("X")
+		buffer.Append("Y")
+		if buffer.Size() != 2 {
+			t.Errorf("Expected size 2 after clear and append, got %v", buffer.Size())
+		}
+		all := buffer.All()
+		expected := []string{"X", "Y"}
+		if len(all) != len(expected) {
+			t.Errorf("Expected %v, got %v", expected, all)
+		}
+		for i, v := range expected {
+			if all[i] != v {
+				t.Errorf("At index %d, expected %v, got %v", i, v, all[i])
+			}
+		}
+	})
 }
