@@ -27,7 +27,7 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • W toggle wrap • L toggle level • G jump to recent • v visual"
+	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • W toggle wrap • L toggle level • G jump to recent • C clear • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
@@ -161,11 +161,18 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 				}
 			}
 
+		case "C":
+			if !m.visualMode {
+				m.log.Clear()
+				m.Render()
+				return m, nil
+			}
+
 		case "v":
 			m.visualMode = !m.visualMode
 			if m.visualMode {
 				m.viewport.GotoBottom()
-				m.currentLine = m.log.Size - 1
+				m.currentLine = m.log.Size() - 1
 				m.Render()
 				return m, nil
 			}
@@ -199,13 +206,13 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			}
 
 		case "y":
-			if m.visualMode && m.currentLine >= 0 && m.currentLine < m.log.Size {
+			if m.visualMode && m.currentLine >= 0 && m.currentLine < m.log.Size() {
 				var err error
 				if m.startSelected >= 0 {
 					start := min(m.currentLine, m.startSelected)
 					end := max(m.currentLine, m.startSelected)
 					var lines []string
-					logs := m.log.Recent(m.log.Size - start)
+					logs := m.log.Recent(m.log.Size() - start)
 					for i := 0; i <= end-start; i++ {
 						lines = append(lines, strings.TrimSpace(logs[i]))
 					}
@@ -213,7 +220,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 					m.startSelected = -1
 					m.Render()
 				} else {
-					logs := m.log.Recent(m.log.Size - m.currentLine)
+					logs := m.log.Recent(m.log.Size() - m.currentLine)
 					lineText := strings.TrimSpace(logs[0])
 					err = util.CopyToClipboard(lineText)
 				}
@@ -224,7 +231,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, nil
 
 		case "j", "down":
-			if m.visualMode && m.currentLine < m.log.Size-1 {
+			if m.visualMode && m.currentLine < m.log.Size()-1 {
 				m.currentLine++
 				m.Render()
 				m.ensureLineVisible()
@@ -342,7 +349,7 @@ func (m *LogcatViewModel) Render() {
 }
 
 func (m *LogcatViewModel) ensureLineVisible() {
-	if !m.visualMode || m.currentLine < 0 || m.currentLine >= m.log.Size {
+	if !m.visualMode || m.currentLine < 0 || m.currentLine >= m.log.Size() {
 		return
 	}
 

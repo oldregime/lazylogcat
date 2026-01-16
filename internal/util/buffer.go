@@ -3,10 +3,9 @@ package util
 import "sync"
 
 type RingBuffer struct {
-	Size int
-
 	lines    []string
 	head     int
+	size     int
 	capacity int
 	mu       sync.RWMutex
 }
@@ -18,7 +17,7 @@ func NewRingBuffer(capacity int) *RingBuffer {
 	return &RingBuffer{
 		lines:    make([]string, capacity),
 		head:     0,
-		Size:     0,
+		size:     0,
 		capacity: capacity,
 	}
 }
@@ -28,20 +27,20 @@ func (b *RingBuffer) Append(l string) {
 	defer b.mu.Unlock()
 	b.lines[b.head] = l
 	b.head = (b.head + 1) % b.capacity
-	if b.Size < b.capacity {
-		b.Size++
+	if b.size < b.capacity {
+		b.size++
 	}
 }
 
 func (b *RingBuffer) Recent(n int) []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	if b.Size == 0 {
+	if b.size == 0 {
 		return []string{}
 	}
-	n = min(n, b.Size)
+	n = min(n, b.size)
 	result := make([]string, n)
-	if b.Size < b.capacity {
+	if b.size < b.capacity {
 		copy(result, b.lines[b.head-n:b.head])
 		return result
 	}
@@ -53,5 +52,19 @@ func (b *RingBuffer) Recent(n int) []string {
 }
 
 func (b *RingBuffer) All() []string {
-	return b.Recent(b.Size)
+	return b.Recent(b.size)
+}
+
+func (b *RingBuffer) Size() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.size
+}
+
+func (b *RingBuffer) Clear() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.lines = make([]string, b.capacity)
+	b.size = 0
+	b.head = 0
 }
