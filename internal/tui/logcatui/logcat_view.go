@@ -57,6 +57,12 @@ type logcatConnectedMsg struct{}
 
 type batchTickMsg struct{}
 
+// updateResult is returned by key handlers to indicate what action to take
+type updateResult struct {
+	cmd         tea.Cmd
+	needsRender bool
+}
+
 func readNext(m LogcatViewModel) tea.Msg {
 	line, err := util.ReadNextLogLine()
 	if err != nil {
@@ -107,8 +113,10 @@ func New(parentSize model.Size, device model.Device, filter model.Filter, format
 
 func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	var (
-		cmd  tea.Cmd
-		cmds []tea.Cmd
+		cmd         tea.Cmd
+		cmds        []tea.Cmd
+		needsRender bool
+		gotoBottom  bool
 	)
 
 	switch msg := msg.(type) {
@@ -117,144 +125,26 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		return m, func() tea.Msg {
 			return tui.MeasureCmd{}
 		}
+
 	case tui.MeasureCmd:
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
 		m.viewport.Width = m.parentSize.Width
 		m.viewport.Height = m.parentSize.Height - footerHeight - headerHeight - 1
-		m.Render()
-		return m, nil
-	}
+		needsRender = true
 
-	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+r":
-			m.visualMode = false
-			return m, func() tea.Msg {
-				return tui.ReconnectLogcatCmd{}
-			}
-
-		case "ctrl+d":
-			return m, func() tea.Msg {
-				return tui.NavigateToDevicesCmd{}
-			}
-
-		case "ctrl+f":
-			return m, func() tea.Msg {
-				return tui.NavigateToFilterCmd{}
-			}
-
-		case "W":
-			if !m.visualMode {
-				m.softWrap = !m.softWrap
-				return m, func() tea.Msg {
-					return tui.ReconnectLogcatCmd{}
-				}
-			}
-			return m, nil
-
-		case "G":
-			m.viewport.GotoBottom()
-			return m, nil
-
-		case "L":
-			if !m.visualMode {
-				m.filter.Level = m.filter.Level.Next()
-				return m, func() tea.Msg {
-					return tui.ReconnectLogcatCmd{}
-				}
-			}
-
-		case "C":
-			if !m.visualMode {
-				m.log.Clear()
-				m.Render()
-				return m, nil
-			}
-
-		case "v":
-			m.visualMode = !m.visualMode
-			if m.visualMode {
-				m.viewport.GotoBottom()
-				m.currentLine = m.log.Size() - 1
-				m.Render()
-				return m, nil
-			}
-			return m, func() tea.Msg {
-				return tui.ReconnectLogcatCmd{}
-			}
-
-		case "V":
-			if m.visualMode {
-				if m.startSelected >= 0 {
-					m.startSelected = -1
-				} else {
-					m.startSelected = m.currentLine
-				}
-				m.Render()
-				return m, nil
-			}
-
-		case "esc":
-			if m.visualMode {
-				if m.startSelected >= 0 {
-					m.startSelected = -1
-					m.Render()
-					return m, nil
-				}
-				m.visualMode = false
-				m.startSelected = -1
-				return m, func() tea.Msg {
-					return tui.ReconnectLogcatCmd{}
-				}
-			}
-
-		case "y":
-			if m.visualMode && m.currentLine >= 0 && m.currentLine < m.log.Size() {
-				var err error
-				if m.startSelected >= 0 {
-					start := min(m.currentLine, m.startSelected)
-					end := max(m.currentLine, m.startSelected)
-					var lines []string
-					logs := m.log.Recent(m.log.Size() - start)
-					for i := 0; i <= end-start; i++ {
-						lines = append(lines, strings.TrimSpace(logs[i]))
-					}
-					err = util.CopyToClipboard(lines...)
-					m.startSelected = -1
-					m.Render()
-				} else {
-					logs := m.log.Recent(m.log.Size() - m.currentLine)
-					lineText := strings.TrimSpace(logs[0])
-					err = util.CopyToClipboard(lineText)
-				}
-				if err != nil {
-					slog.Error("Failed to copy to clipboard", "error", err)
-				}
-			}
-			return m, nil
-
-		case "j", "down":
-			if m.visualMode && m.currentLine < m.log.Size()-1 {
-				m.currentLine++
-				m.Render()
-				m.ensureLineVisible()
-			}
-
-		case "k", "up":
-			if m.visualMode && m.currentLine > 0 {
-				m.currentLine--
-				m.Render()
-				m.ensureLineVisible()
-			}
+		result := m.handleKeyMsg(msg)
+		cmd = result.cmd
+		needsRender = result.needsRender
+		if cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 
 	case tui.ReconnectLogcatCmd:
 		util.CloseLogcat()
 		m.log = util.NewRingBuffer(maxLogLines)
 		m.pendingLogs = nil
-
 		return m, tea.Batch(
 			func() tea.Msg {
 				err := util.ConnectLogcat(m.device.Id, m.filter, m.format)
@@ -284,21 +174,18 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 	case batchTickMsg:
-		if m.visualMode {
-			return m, nil
-		}
-		if len(m.pendingLogs) > 0 {
+		if !m.visualMode && len(m.pendingLogs) > 0 {
 			wasAtBottom := m.viewport.AtBottom()
 			for _, line := range m.pendingLogs {
 				m.log.Append(line + "\n")
 			}
 			m.pendingLogs = nil
-			m.Render()
+			needsRender = true
 			if wasAtBottom {
-				m.viewport.GotoBottom()
+				gotoBottom = true
 			}
 		}
-		return m, tickForBatch()
+		cmds = append(cmds, tickForBatch())
 
 	case logcatErrorMsg:
 		m.err = msg.Err
@@ -306,9 +193,19 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		return m, nil
 	}
 
+	if needsRender {
+		m.Render()
+	}
+	if gotoBottom {
+		m.viewport.GotoBottom()
+	}
+
+	// Viewport update for non-visual mode scrolling (skip internal tick messages)
 	if !m.visualMode {
-		m.viewport, cmd = m.viewport.Update(msg)
-		cmds = append(cmds, cmd)
+		if _, isBatchTick := msg.(batchTickMsg); !isBatchTick {
+			m.viewport, cmd = m.viewport.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -359,6 +256,148 @@ func (m *LogcatViewModel) Render() {
 		wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
 	}
 	m.viewport.SetContent(wrapped)
+}
+
+// handleKeyMsg routes key messages to appropriate handlers based on mode
+func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
+	key := msg.String()
+
+	// Try global keys first (work in both modes)
+	if result, handled := m.handleGlobalKey(key); handled {
+		return result
+	}
+
+	// Mode-specific handling
+	if m.visualMode {
+		return m.handleVisualModeKey(key)
+	}
+	return m.handleNormalModeKey(key)
+}
+
+// handleGlobalKey handles keys that work in both normal and visual modes
+func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
+	switch key {
+	case "ctrl+r":
+		m.visualMode = false
+		return updateResult{
+			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
+		}, true
+
+	case "ctrl+d":
+		return updateResult{
+			cmd: func() tea.Msg { return tui.NavigateToDevicesCmd{} },
+		}, true
+
+	case "ctrl+f":
+		return updateResult{
+			cmd: func() tea.Msg { return tui.NavigateToFilterCmd{} },
+		}, true
+
+	case "G":
+		m.viewport.GotoBottom()
+		return updateResult{}, true
+
+	case "v":
+		m.visualMode = !m.visualMode
+		if m.visualMode {
+			m.viewport.GotoBottom()
+			m.currentLine = m.log.Size() - 1
+			return updateResult{needsRender: true}, true
+		}
+		return updateResult{
+			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
+		}, true
+	}
+
+	return updateResult{}, false
+}
+
+// handleNormalModeKey handles keys specific to normal (non-visual) mode
+func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
+	switch key {
+	case "W":
+		m.softWrap = !m.softWrap
+		return updateResult{
+			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
+		}
+
+	case "L":
+		m.filter.Level = m.filter.Level.Next()
+		return updateResult{
+			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
+		}
+
+	case "C":
+		m.log.Clear()
+		return updateResult{needsRender: true}
+	}
+
+	return updateResult{}
+}
+
+// handleVisualModeKey handles keys specific to visual mode
+func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
+	switch key {
+	case "V":
+		if m.startSelected >= 0 {
+			m.startSelected = -1
+		} else {
+			m.startSelected = m.currentLine
+		}
+		return updateResult{needsRender: true}
+
+	case "esc":
+		if m.startSelected >= 0 {
+			m.startSelected = -1
+			return updateResult{needsRender: true}
+		}
+		m.visualMode = false
+		m.startSelected = -1
+		return updateResult{
+			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
+		}
+
+	case "y":
+		if m.currentLine >= 0 && m.currentLine < m.log.Size() {
+			var err error
+			if m.startSelected >= 0 {
+				start := min(m.currentLine, m.startSelected)
+				end := max(m.currentLine, m.startSelected)
+				var lines []string
+				logs := m.log.Recent(m.log.Size() - start)
+				for i := 0; i <= end-start; i++ {
+					lines = append(lines, strings.TrimSpace(logs[i]))
+				}
+				err = util.CopyToClipboard(lines...)
+				m.startSelected = -1
+				return updateResult{needsRender: true}
+			} else {
+				logs := m.log.Recent(m.log.Size() - m.currentLine)
+				lineText := strings.TrimSpace(logs[0])
+				err = util.CopyToClipboard(lineText)
+			}
+			if err != nil {
+				slog.Error("Failed to copy to clipboard", "error", err)
+			}
+		}
+		return updateResult{}
+
+	case "j", "down":
+		if m.currentLine < m.log.Size()-1 {
+			m.currentLine++
+			m.ensureLineVisible()
+			return updateResult{needsRender: true}
+		}
+
+	case "k", "up":
+		if m.currentLine > 0 {
+			m.currentLine--
+			m.ensureLineVisible()
+			return updateResult{needsRender: true}
+		}
+	}
+
+	return updateResult{}
 }
 
 func (m *LogcatViewModel) ensureLineVisible() {
