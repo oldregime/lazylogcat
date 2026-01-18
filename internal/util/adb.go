@@ -8,13 +8,11 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
-const initialLogHistorySeconds = 60
+const initialLogLinesCount = 1000
 
 var (
 	ErrFailedToGetDevices     = fmt.Errorf("failed to get connected devices")
@@ -25,10 +23,8 @@ var (
 )
 
 var (
-	logcatCmd           *exec.Cmd
-	logcatScanner       *bufio.Scanner
-	firstConnectionTime *time.Time
-	firstConnOnce       sync.Once
+	logcatCmd     *exec.Cmd
+	logcatScanner *bufio.Scanner
 )
 
 func GetConnectedDevices() ([]model.Device, error) {
@@ -65,27 +61,8 @@ func GetConnectedDevices() ([]model.Device, error) {
 	return devices, nil
 }
 
-func getFirstConnectionTime() *time.Time {
-	firstConnOnce.Do(func() {
-		t := time.Now()
-		firstConnectionTime = &t
-	})
-	return firstConnectionTime
-}
-
-func timeDiffInSeconds(start *time.Time, end *time.Time) int {
-	if start == nil || end == nil {
-		return -1
-	}
-	return int(end.Sub(*start).Seconds())
-}
-
 func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
-	now := time.Now()
-	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
-	t := max(diff, initialLogHistorySeconds)
-
-	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(t)}
+	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(initialLogLinesCount)}
 
 	if filter.PackageName != "" {
 		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
@@ -169,6 +146,7 @@ func ReadNextLogLine() (string, error) {
 
 func CloseLogcat() error {
 	if logcatCmd != nil && logcatCmd.Process != nil {
+		slog.Debug("Killing adb logcat process")
 		logcatCmd.Process.Kill()
 		logcatCmd.Wait()
 		logcatCmd = nil
