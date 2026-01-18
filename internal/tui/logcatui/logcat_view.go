@@ -49,6 +49,8 @@ type logcatMsg struct {
 	Line string
 }
 
+type logcatEmptyMsg struct{}
+
 type logcatErrorMsg struct {
 	Err error
 }
@@ -75,12 +77,12 @@ func readNext(m LogcatViewModel) tea.Msg {
 
 	// Filter empty lines (allowed in long format)
 	if !m.format.Long && strings.Trim(line, "\n\r ") == "" {
-		return nil
+		return logcatEmptyMsg{}
 	}
 
-	// Filter by text search
-	if m.filter.Text != "" && !strings.Contains(line, m.filter.Text) {
-		return nil
+	// Filter by text search (case-insensitive)
+	if m.filter.Text != "" && !strings.Contains(strings.ToLower(line), strings.ToLower(m.filter.Text)) {
+		return logcatEmptyMsg{}
 	}
 
 	return logcatMsg{Line: line}
@@ -169,6 +171,14 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, nil
 		}
 		m.pendingLogs = append(m.pendingLogs, msg.Line)
+		return m, func() tea.Msg {
+			return readNext(m)
+		}
+
+	case logcatEmptyMsg:
+		if m.visualMode {
+			return m, nil
+		}
 		return m, func() tea.Msg {
 			return readNext(m)
 		}
