@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -25,24 +26,31 @@ var (
 		return theme.Panel().
 			Padding(0, 1)
 	}()
+	dialogStyle = func() lipgloss.Style {
+		return theme.ActivePanel().
+			Width(50).
+			Height(10).
+			Padding(1, 2)
+	}
 
 	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • W toggle wrap • L toggle level • G jump to recent • C clear • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
 type LogcatViewModel struct {
-	parentSize    model.Size
-	viewport      viewport.Model
-	device        model.Device
-	filter        model.Filter
-	format        model.Format
-	log           *util.RingBuffer
-	pendingLogs   []string
-	visualMode    bool
-	currentLine   int
-	startSelected int
-	softWrap      bool
-	err           error
+	parentSize        model.Size
+	viewport          viewport.Model
+	device            model.Device
+	filter            model.Filter
+	format            model.Format
+	log               *util.RingBuffer
+	pendingLogs       []string
+	visualMode        bool
+	currentLine       int
+	startSelected     int
+	softWrap          bool
+	err               error
+	showCommandDialog bool
 }
 
 type logcatMsg struct {
@@ -340,6 +348,10 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 	case "C":
 		m.log.Clear()
 		return updateResult{needsRender: true}
+
+	case "ctrl+p":
+		m.showCommandDialog = !m.showCommandDialog
+		return updateResult{needsRender: true}
 	}
 
 	return updateResult{}
@@ -436,18 +448,158 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	}
 }
 
-func (m LogcatViewModel) View() string {
-	if m.err != nil {
-		slog.Error("Logcat view error", "error", m.err)
-		return fmt.Sprintf("Error: %v\n", m.err)
-	}
-
+func (m LogcatViewModel) renderBaseView() string {
 	return fmt.Sprintf(
 		"%s\n%s\n%s",
 		m.headerView(),
 		m.viewport.View(),
 		m.footerView(),
 	)
+}
+
+// dimView applies a dimming effect to the view content
+func (m LogcatViewModel) dimView(view string) string {
+	// Apply faint style to each line to dim the content
+	dimStyle := lipgloss.NewStyle().Faint(true)
+
+	lines := strings.Split(view, "\n")
+	dimmedLines := make([]string, len(lines))
+
+	for i, line := range lines {
+		dimmedLines[i] = dimStyle.Render(line)
+	}
+
+	return strings.Join(dimmedLines, "\n")
+}
+
+func (m LogcatViewModel) overlayDialog(baseView, dialog string) string {
+	// Ensure base view fills the entire parent size
+	background := lipgloss.Place(
+		m.parentSize.Width,
+		m.parentSize.Height,
+		lipgloss.Left,
+		lipgloss.Top,
+		baseView,
+	)
+
+	// Split background into lines
+	bgLines := strings.Split(background, "\n")
+
+	// Calculate dialog dimensions
+	dialogLines := strings.Split(dialog, "\n")
+	dialogHeight := len(dialogLines)
+	dialogWidth := 0
+	for _, line := range dialogLines {
+		w := ansi.StringWidth(line)
+		if w > dialogWidth {
+			dialogWidth = w
+		}
+	}
+
+	// Calculate center position
+	x := (m.parentSize.Width - dialogWidth) / 2
+	y := (m.parentSize.Height - dialogHeight) / 2
+
+	// Ensure we don't go out of bounds
+	if y < 0 {
+		y = 0
+	}
+	if x < 0 {
+		x = 0
+	}
+
+	// Overlay dialog onto background
+	var result strings.Builder
+	for i := 0; i < len(bgLines); i++ {
+		// Check if this line should have dialog content overlaid
+		dialogLineIdx := i - y
+		if dialogLineIdx >= 0 && dialogLineIdx < dialogHeight {
+			// This line needs dialog overlay
+			bgLine := bgLines[i]
+			dialogLine := dialogLines[dialogLineIdx]
+
+			// Overlay the dialog line at position x
+			overlaidLine := m.overlayLine(bgLine, dialogLine, x)
+			result.WriteString(overlaidLine)
+		} else {
+			// No overlay needed, use background as-is
+			result.WriteString(bgLines[i])
+		}
+
+		if i < len(bgLines)-1 {
+			result.WriteString("\n")
+		}
+	}
+
+	return result.String()
+}
+
+// overlayLine overlays foreground onto background at position x (in visual character positions)
+func (m LogcatViewModel) overlayLine(background, foreground string, x int) string {
+	bgWidth := ansi.StringWidth(background)
+	fgWidth := ansi.StringWidth(foreground)
+
+	// If the overlay position is beyond the background width, just return background
+	if x >= bgWidth {
+		return background
+	}
+
+	// Truncate background to make space for foreground, then append foreground and remainder
+	// We need to work with visual positions, not byte positions
+	var result strings.Builder
+
+	// Add the part before the overlay (0 to x)
+	if x > 0 {
+		prefix := ansi.Truncate(background, x, "")
+		result.WriteString(prefix)
+	}
+
+	// Add the foreground
+	result.WriteString(foreground)
+
+	// Add the part after the overlay
+	endPos := x + fgWidth
+	if endPos < bgWidth {
+		// We need to skip the first 'endPos' characters and take the rest
+		// Since ansi.Truncate doesn't support offset, we'll do a simpler approach:
+		// Just pad if needed, as the dialog will cover the middle part
+		remaining := bgWidth - endPos
+		if remaining > 0 {
+			result.WriteString(strings.Repeat(" ", remaining))
+		}
+	}
+
+	return result.String()
+}
+
+func (m LogcatViewModel) renderDialog() string {
+	content := "Command List\n\n" +
+		"W  - Toggle wrap\n" +
+		"L  - Toggle level\n" +
+		"G  - Jump to recent\n" +
+		"C  - Clear logs\n" +
+		"v  - Visual mode\n\n" +
+		"Press ctrl+p to close"
+
+	return dialogStyle().Render(content)
+}
+
+func (m LogcatViewModel) View() string {
+	if m.err != nil {
+		slog.Error("Logcat view error", "error", m.err)
+		return fmt.Sprintf("Error: %v\n", m.err)
+	}
+
+	baseView := m.renderBaseView()
+
+	if m.showCommandDialog {
+		// Apply dimming effect to base view when dialog is shown
+		dimmedBaseView := m.dimView(baseView)
+		dialogContent := m.renderDialog()
+		return m.overlayDialog(dimmedBaseView, dialogContent)
+	}
+
+	return baseView
 }
 
 func (m LogcatViewModel) headerView() string {
