@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
+	"github.com/parfenovvs/lazylogcat/internal/tui/commandui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -51,6 +52,7 @@ type LogcatViewModel struct {
 	softWrap          bool
 	err               error
 	showCommandDialog bool
+	commandList       []commandui.CommandGroup
 }
 
 type logcatMsg struct {
@@ -457,21 +459,6 @@ func (m LogcatViewModel) renderBaseView() string {
 	)
 }
 
-// dimView applies a dimming effect to the view content
-func (m LogcatViewModel) dimView(view string) string {
-	// Apply faint style to each line to dim the content
-	dimStyle := lipgloss.NewStyle().Faint(true)
-
-	lines := strings.Split(view, "\n")
-	dimmedLines := make([]string, len(lines))
-
-	for i, line := range lines {
-		dimmedLines[i] = dimStyle.Render(line)
-	}
-
-	return strings.Join(dimmedLines, "\n")
-}
-
 func (m LogcatViewModel) overlayDialog(baseView, dialog string) string {
 	// Ensure base view fills the entire parent size
 	background := lipgloss.Place(
@@ -594,7 +581,7 @@ func (m LogcatViewModel) View() string {
 
 	if m.showCommandDialog {
 		// Apply dimming effect to base view when dialog is shown
-		dimmedBaseView := m.dimView(baseView)
+		dimmedBaseView := tui.DimView(baseView)
 		dialogContent := m.renderDialog()
 		return m.overlayDialog(dimmedBaseView, dialogContent)
 	}
