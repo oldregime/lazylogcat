@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -29,8 +30,6 @@ var (
 	}()
 	dialogStyle = func() lipgloss.Style {
 		return theme.ActivePanel().
-			Width(50).
-			Height(10).
 			Padding(1, 2)
 	}
 
@@ -52,7 +51,8 @@ type LogcatViewModel struct {
 	softWrap          bool
 	err               error
 	showCommandDialog bool
-	commandList       []commandui.CommandGroup
+	commandTable      table.Model
+	commandSkipRows   map[int]bool
 }
 
 type logcatMsg struct {
@@ -221,7 +221,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	}
 
 	// Viewport update for non-visual mode scrolling (skip internal tick messages)
-	if !m.visualMode {
+	if !m.visualMode && !m.showCommandDialog {
 		if _, isBatchTick := msg.(batchTickMsg); !isBatchTick {
 			m.viewport, cmd = m.viewport.Update(msg)
 			cmds = append(cmds, cmd)
@@ -281,6 +281,36 @@ func (m *LogcatViewModel) Render() {
 // handleKeyMsg routes key messages to appropriate handlers based on mode
 func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 	key := msg.String()
+
+	// When command dialog is open, capture all keys
+	if m.showCommandDialog {
+		if key == "ctrl+p" || key == "esc" {
+			m.showCommandDialog = false
+			return updateResult{needsRender: true}
+		}
+		prevCursor := m.commandTable.Cursor()
+		m.commandTable, _ = m.commandTable.Update(msg)
+		newCursor := m.commandTable.Cursor()
+
+		if m.commandSkipRows[newCursor] && newCursor != prevCursor {
+			dir := 1
+			if newCursor < prevCursor {
+				dir = -1
+			}
+			rowCount := len(m.commandTable.Rows())
+			target := newCursor + dir
+			for target >= 0 && target < rowCount && m.commandSkipRows[target] {
+				target += dir
+			}
+			if target >= 0 && target < rowCount {
+				m.commandTable.SetCursor(target)
+			} else {
+				m.commandTable.SetCursor(prevCursor)
+			}
+		}
+
+		return updateResult{}
+	}
 
 	// Try global keys first (work in both modes)
 	if result, handled := m.handleGlobalKey(key); handled {
@@ -353,6 +383,9 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 
 	case "ctrl+p":
 		m.showCommandDialog = !m.showCommandDialog
+		if m.showCommandDialog {
+			m.commandTable, m.commandSkipRows = newCommandTable(m.filter, m.format, m.softWrap)
+		}
 		return updateResult{needsRender: true}
 	}
 
@@ -559,15 +592,116 @@ func (m LogcatViewModel) overlayLine(background, foreground string, x int) strin
 	return result.String()
 }
 
-func (m LogcatViewModel) renderDialog() string {
-	content := "Command List\n\n" +
-		"W  - Toggle wrap\n" +
-		"L  - Toggle level\n" +
-		"G  - Jump to recent\n" +
-		"C  - Clear logs\n" +
-		"v  - Visual mode\n\n" +
-		"Press ctrl+p to close"
+func truncateMiddle(s string, maxWidth int) string {
+	w := ansi.StringWidth(s)
+	if w <= maxWidth {
+		return s
+	}
+	// Reserve 1 char for the ellipsis
+	left := (maxWidth - 1) / 2
+	right := maxWidth - 1 - left
 
+	// Take `right` visual-width chars from the end
+	runes := []rune(s)
+	var suffix string
+	suffixW := 0
+	for i := len(runes) - 1; i >= 0 && suffixW < right; i-- {
+		suffixW++
+		suffix = string(runes[i]) + suffix
+	}
+
+	return ansi.Truncate(s, left, "") + "…" + suffix
+}
+
+func newCommandTable(filter model.Filter, format model.Format, softWrap bool) (table.Model, map[int]bool) {
+	columns := []table.Column{
+		{Title: "", Width: 16},
+		{Title: "", Width: 10},
+		{Title: "", Width: 10},
+	}
+
+	resolveValue := func(cmd commandui.Command) string {
+		switch cmd {
+		case commandui.CommandPackage:
+			return filter.PackageName
+		case commandui.CommandTag:
+			return filter.Tag
+		case commandui.CommandLevel:
+			lvl := string(filter.Level)
+			if lvl == "" {
+				lvl = "V"
+			}
+			return lvl
+		case commandui.CommandContent:
+			return filter.Text
+		case commandui.CommandFormat:
+			return format.Value()
+		case commandui.CommandModifiers:
+			mods := format.Modifiers()
+			switch len(mods) {
+			case 0:
+				return ""
+			case 1:
+				return mods[0]
+			default:
+				return fmt.Sprintf("[%d] mods", len(mods))
+			}
+		case commandui.CommandToggleWrap:
+			if softWrap {
+				return "on"
+			}
+			return "off"
+		default:
+			return ""
+		}
+	}
+
+	skipRows := make(map[int]bool)
+	var rows []table.Row
+	for i, group := range commandui.Commands() {
+		if i > 0 {
+			skipRows[len(rows)] = true
+			rows = append(rows, table.Row{"", "", ""})
+		}
+		skipRows[len(rows)] = true
+		groupName := lipgloss.NewStyle().Bold(true).Render(group.Name)
+		rows = append(rows, table.Row{groupName, "", ""})
+		for _, cmd := range group.Commands {
+			value := truncateMiddle(resolveValue(cmd.Command), 10)
+			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
+		}
+	}
+
+	km := table.DefaultKeyMap()
+	km.GotoTop.SetEnabled(false)
+	km.GotoBottom.SetEnabled(false)
+	km.HalfPageUp.SetEnabled(false)
+	km.HalfPageDown.SetEnabled(false)
+	km.PageDown.SetEnabled(false)
+
+	s := table.Styles{
+		Header:   lipgloss.NewStyle(),
+		Cell:     lipgloss.NewStyle().Padding(0, 1),
+		Selected: lipgloss.NewStyle().Bold(true).Foreground(theme.FGSelected).Background(theme.BGCursor),
+	}
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithHeight(len(rows)),
+		table.WithFocused(true),
+		table.WithKeyMap(km),
+	)
+	t.SetStyles(s)
+	t.SetCursor(1) // Skip the first group header
+
+	return t, skipRows
+}
+
+func (m LogcatViewModel) renderDialog() string {
+	title := lipgloss.NewStyle().Bold(true).Render("Command List")
+	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
+	content := title + "\n" + m.commandTable.View() + "\n" + footer
 	return dialogStyle().Render(content)
 }
 
@@ -580,7 +714,6 @@ func (m LogcatViewModel) View() string {
 	baseView := m.renderBaseView()
 
 	if m.showCommandDialog {
-		// Apply dimming effect to base view when dialog is shown
 		dimmedBaseView := tui.DimView(baseView)
 		dialogContent := m.renderDialog()
 		return m.overlayDialog(dimmedBaseView, dialogContent)

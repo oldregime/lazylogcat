@@ -51,10 +51,10 @@ func Commands() []CommandGroup {
 		{
 			Name: "Filters",
 			Commands: []CommandData{
-				{Command: CommandPackage, Type: CommandTypeInput, Name: "Filter by package", Shortcut: "ctrl+x p"},
-				{Command: CommandTag, Type: CommandTypeInput, Name: "Filter by tag", Shortcut: "ctrl+x t"},
-				{Command: CommandLevel, Type: CommandTypeNavigation, Name: "Filter by level", Shortcut: "ctrl+x l"},
-				{Command: CommandContent, Type: CommandTypeInput, Name: "Filter by text", Shortcut: "ctrl+x c"},
+				{Command: CommandPackage, Type: CommandTypeInput, Name: "Package", Shortcut: "ctrl+x p"},
+				{Command: CommandTag, Type: CommandTypeInput, Name: "Tag", Shortcut: "ctrl+x t"},
+				{Command: CommandLevel, Type: CommandTypeNavigation, Name: "Log level", Shortcut: "ctrl+x l"},
+				{Command: CommandContent, Type: CommandTypeInput, Name: "Content", Shortcut: "ctrl+x c"},
 			},
 		},
 		{
