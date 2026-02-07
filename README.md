@@ -97,7 +97,12 @@ lazylogcat --debug
 
 Configuration is automatically discovered and merged in layers:
 
-`~/.config/lazylogcat/config.json` → `.lazylogcat/config.json` → `.lazylogcat/config.local.json`
+`<config-dir>/lazylogcat/config.json` → `.lazylogcat/config.json` → `.lazylogcat/config.local.json`
+
+Where `<config-dir>` is the OS-specific user config directory:
+- **Linux**: `~/.config`
+- **macOS**: `~/Library/Application Support`
+- **Windows**: `%AppData%`
 
 Each layer overrides the previous. All fields are optional. See the [JSON Schema](config.schema.json) for editor autocompletion.
 
