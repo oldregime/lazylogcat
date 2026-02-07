@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
@@ -40,16 +41,11 @@ const (
 	stateTextInput
 )
 
-const (
-	dialogWidth     = 48
-	dialogMaxHeight = 27
-)
-
 var dialogStyle = func() lipgloss.Style {
 	return theme.ActivePanel().
 		Padding(1, 2).
-		Width(dialogWidth).
-		MaxHeight(dialogMaxHeight)
+		Width(tui.DialogWidth).
+		MaxHeight(tui.DialogMaxHeight)
 }
 
 type CommandDialogModel struct {

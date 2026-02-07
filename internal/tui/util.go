@@ -8,6 +8,12 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
+// Dialog size constants used by the command dialog overlay.
+const (
+	DialogWidth     = 48
+	DialogMaxHeight = 27
+)
+
 // DimView applies a dimming effect to the view content
 func DimView(view string) string {
 	dimStyle := lipgloss.NewStyle().Faint(true)
@@ -22,7 +28,9 @@ func DimView(view string) string {
 	return strings.Join(dimmedLines, "\n")
 }
 
-// OverlayDialog centers a dialog string on top of a base view, using parentSize for layout.
+// OverlayDialog overlays a dialog string on top of a base view, using parentSize for layout.
+// The vertical position is calculated based on DialogMaxHeight so that all dialogs share the same
+// top position regardless of their actual rendered height.
 func OverlayDialog(parentSize model.Size, baseView, dialog string) string {
 	background := lipgloss.Place(
 		parentSize.Width,
@@ -45,7 +53,12 @@ func OverlayDialog(parentSize model.Size, baseView, dialog string) string {
 	}
 
 	x := (parentSize.Width - dialogWidth) / 2
-	y := (parentSize.Height - dialogHeight) / 2
+
+	verticalSize := dialogHeight
+	if DialogMaxHeight > dialogHeight {
+		verticalSize = DialogMaxHeight
+	}
+	y := (parentSize.Height - verticalSize) / 2
 
 	if y < 0 {
 		y = 0
