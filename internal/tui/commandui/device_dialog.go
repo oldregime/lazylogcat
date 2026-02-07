@@ -2,7 +2,6 @@ package commandui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,114 +16,74 @@ type CommandDialogDeviceSelectedMsg struct {
 	Device model.Device
 }
 
-func loadDevices(selectedDevice *model.Device) (table.Model, map[int]model.Device, []model.Device, error) {
-	devices, err := util.GetConnectedDevices()
-	if err != nil {
-		return table.Model{}, nil, nil, fmt.Errorf("failed to get devices: %w", err)
-	}
-
-	t, dm := newDeviceTable(devices, selectedDevice)
-	return t, dm, devices, nil
-}
-
-func newDeviceTable(devices []model.Device, selectedDevice *model.Device) (table.Model, map[int]model.Device) {
-	columns := []table.Column{
-		{Title: "", Width: 20},
-		{Title: "", Width: 18},
-		{Title: "", Width: 3},
-	}
-
-	deviceMap := make(map[int]model.Device)
-	var rows []table.Row
-	initialCursor := 0
-	for i, device := range devices {
-		deviceMap[i] = device
-		marker := ""
-		if selectedDevice != nil && selectedDevice.Id == device.Id {
-			marker = "●"
-			initialCursor = i
-		}
-
+func deviceSingleSelectItems(devices []model.Device) []SingleSelectItem {
+	var items []SingleSelectItem
+	for _, device := range devices {
 		name := device.Name
 		maxNameLen := 18
 		if len(name) > maxNameLen {
 			name = name[:maxNameLen-3] + "..."
 		}
-
-		rows = append(rows, table.Row{name, device.Id, marker})
+		items = append(items, SingleSelectItem{
+			Key:     device.Id,
+			Columns: []string{name, device.Id},
+		})
 	}
+	return items
+}
 
-	height := len(rows) + 1
-	if height < 2 {
-		height = 2
+func newDeviceSingleSelect(devices []model.Device, selectedDevice *model.Device) SingleSelectModel {
+	currentKey := ""
+	if selectedDevice != nil {
+		currentKey = selectedDevice.Id
 	}
+	return NewSingleSelect(SingleSelectConfig{
+		Title:  "Select Device",
+		Footer: "esc to close \u2022 r refresh",
+		Columns: []table.Column{
+			{Title: "", Width: 20},
+			{Title: "", Width: 18},
+		},
+		Items:      deviceSingleSelectItems(devices),
+		CurrentKey: currentKey,
+	})
+}
 
-	t := newTable(columns, rows, height)
-	if len(rows) > 0 {
-		t.SetCursor(initialCursor)
+func loadDevices(selectedDevice *model.Device) (SingleSelectModel, []model.Device, error) {
+	devices, err := util.GetConnectedDevices()
+	if err != nil {
+		return SingleSelectModel{}, nil, fmt.Errorf("failed to get devices: %w", err)
 	}
-
-	return t, deviceMap
+	ss := newDeviceSingleSelect(devices, selectedDevice)
+	return ss, devices, nil
 }
 
 func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
 	if key == "r" {
-		deviceTable, deviceMap, allDevices, err := loadDevices(m.selectedDevice)
-		m.deviceTable = deviceTable
-		m.deviceMap = deviceMap
+		ss, allDevices, err := loadDevices(m.selectedDevice)
+		m.singleSelect = ss
 		m.allDevices = allDevices
 		m.deviceErr = err
-		// Reapply current filter after refresh
-		if m.searchInput.Value() != "" {
-			m.filterDeviceRows()
-		}
 		return m, nil
 	}
 
-	if key == "enter" {
-		if device, ok := m.deviceMap[m.deviceTable.Cursor()]; ok {
-			return m, func() tea.Msg { return CommandDialogDeviceSelectedMsg{Device: device} }
+	var cmd tea.Cmd
+	m.singleSelect, cmd = m.singleSelect.Update(msg, key)
+	if m.singleSelect.Selected() {
+		deviceId := m.singleSelect.SelectedKey()
+		// Find the device by ID from allDevices
+		for _, device := range m.allDevices {
+			if device.Id == deviceId {
+				d := device
+				return m, func() tea.Msg { return CommandDialogDeviceSelectedMsg{Device: d} }
+			}
 		}
-		return m, nil
 	}
-
-	// Arrow keys go to table navigation
-	if key == "up" || key == "down" {
-		if len(m.deviceMap) > 0 {
-			m.deviceTable, _ = m.deviceTable.Update(msg)
-		}
-		return m, nil
-	}
-
-	// All other keys go to the search input
-	prevValue := m.searchInput.Value()
-	m.searchInput, _ = m.searchInput.Update(msg)
-	if m.searchInput.Value() != prevValue {
-		m.filterDeviceRows()
-	}
-
-	return m, nil
-}
-
-func (m *CommandDialogModel) filterDeviceRows() {
-	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
-
-	var filtered []model.Device
-	for _, device := range m.allDevices {
-		if query != "" &&
-			!strings.Contains(strings.ToLower(device.Name), query) &&
-			!strings.Contains(strings.ToLower(device.Id), query) {
-			continue
-		}
-		filtered = append(filtered, device)
-	}
-
-	t, dm := newDeviceTable(filtered, m.selectedDevice)
-	m.deviceTable = t
-	m.deviceMap = dm
+	return m, cmd
 }
 
 func (m CommandDialogModel) viewDevices() string {
+	// Devices has special error/empty states, so we render manually instead of using singleSelect.View()
 	title := lipgloss.NewStyle().Bold(true).Render("Select Device")
 
 	var body string
@@ -144,20 +103,12 @@ func (m CommandDialogModel) viewDevices() string {
 			Foreground(theme.FGHelp).
 			Render("Press 'r' to refresh")
 		body = "\n" + emptyMsg + "\n\n" + hint
-	} else if len(m.deviceMap) == 0 && m.searchInput.Value() != "" {
-		body = lipgloss.NewStyle().Foreground(theme.FGHelp).Render("No results found")
 	} else {
-		body = m.deviceTable.View()
+		// Delegate to singleSelect.View() when we have devices
+		return m.singleSelect.View()
 	}
 
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close • r refresh")
-
-	// Show search input only when there are devices to search through
-	if m.deviceErr == nil && len(m.allDevices) > 0 {
-		content := title + "\n\n" + m.searchInput.View() + "\n" + body + "\n\n" + footer
-		return dialogStyle().Render(content)
-	}
-
+	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close \u2022 r refresh")
 	content := title + "\n\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }
