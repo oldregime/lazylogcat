@@ -5,9 +5,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -41,8 +41,8 @@ func newDeviceSingleSelect(devices []model.Device, selectedDevice *model.Device)
 		Title:  "Select Device",
 		Footer: "esc to close \u2022 r refresh",
 		Columns: []table.Column{
-			{Title: "", Width: 20},
-			{Title: "", Width: 18},
+			{Title: "", Width: 14},
+			{Title: "", Width: tui.DialogWidth - 23},
 		},
 		Items:      deviceSingleSelectItems(devices),
 		CurrentKey: currentKey,
@@ -84,23 +84,19 @@ func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDi
 
 func (m CommandDialogModel) viewDevices() string {
 	// Devices has special error/empty states, so we render manually instead of using singleSelect.View()
-	title := lipgloss.NewStyle().Bold(true).Render("Select Device")
+	title := theme.DialogTitle().Render("Select Device")
 
 	var body string
 	if m.deviceErr != nil {
-		errorMsg := lipgloss.NewStyle().
-			Foreground(theme.FGHelp).
+		errorMsg := theme.DialogHelp().
 			Render(fmt.Sprintf("Error: %s", m.deviceErr.Error()))
-		hint := lipgloss.NewStyle().
-			Foreground(theme.FGHelp).
+		hint := theme.DialogHelp().
 			Render("Press 'r' to retry")
 		body = "\n" + errorMsg + "\n\n" + hint
 	} else if len(m.allDevices) == 0 {
-		emptyMsg := lipgloss.NewStyle().
-			Foreground(theme.FGHelp).
+		emptyMsg := theme.DialogHelp().
 			Render("No devices connected.")
-		hint := lipgloss.NewStyle().
-			Foreground(theme.FGHelp).
+		hint := theme.DialogHelp().
 			Render("Press 'r' to refresh")
 		body = "\n" + emptyMsg + "\n\n" + hint
 	} else {
@@ -108,7 +104,7 @@ func (m CommandDialogModel) viewDevices() string {
 		return m.singleSelect.View()
 	}
 
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close \u2022 r refresh")
+	footer := theme.DialogHelp().Render("esc to close \u2022 r refresh")
 	content := title + "\n\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

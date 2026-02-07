@@ -5,6 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 )
 
 type CommandDialogLevelSelectedMsg struct {
@@ -35,8 +36,8 @@ func newLevelSingleSelect(currentLevel model.Level) SingleSelectModel {
 		Title:  "Log Level",
 		Footer: "esc to close",
 		Columns: []table.Column{
-			{Title: "", Width: 5},
-			{Title: "", Width: 12},
+			{Title: "", Width: 1},
+			{Title: "", Width: tui.DialogWidth - 10},
 		},
 		Items:      items,
 		CurrentKey: string(currentLevel),

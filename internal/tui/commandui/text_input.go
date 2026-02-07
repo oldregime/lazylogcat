@@ -5,7 +5,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -98,14 +97,15 @@ func (m TextInputModel) Value() string {
 
 // View renders the text input dialog.
 func (m TextInputModel) View() string {
-	title := lipgloss.NewStyle().Bold(true).Render(m.title)
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render(m.footer)
+	title := theme.DialogTitle().Render(m.title)
+	footer := theme.DialogHelp().Render(m.footer)
 
 	var errorLine string
 	if m.errorMsg != "" {
-		errorLine = "\n" + lipgloss.NewStyle().Foreground(theme.FGError).Render(m.errorMsg)
+		errorLine = "\n" + theme.DialogError().Render(m.errorMsg)
 	}
 
-	content := title + "\n\n" + m.input.View() + errorLine + "\n\n" + footer
+	input := theme.DialogSearch().Render(m.input.View())
+	content := title + "\n\n" + input + errorLine + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

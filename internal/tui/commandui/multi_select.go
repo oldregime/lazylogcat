@@ -1,12 +1,12 @@
 package commandui
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -36,9 +36,7 @@ type MultiSelectModel struct {
 // NewMultiSelect creates a new MultiSelectModel from the given config.
 func NewMultiSelect(cfg MultiSelectConfig) MultiSelectModel {
 	active := make(map[string]bool)
-	for k, v := range cfg.Active {
-		active[k] = v
-	}
+	maps.Copy(active, cfg.Active)
 	m := MultiSelectModel{
 		title:       cfg.Title,
 		footer:      cfg.Footer,
@@ -52,10 +50,10 @@ func NewMultiSelect(cfg MultiSelectConfig) MultiSelectModel {
 }
 
 func (m *MultiSelectModel) buildRows(items []string) {
-	// Add a marker column to the configured columns
+	// Add a marker column as the first column
 	cols := make([]table.Column, len(m.columns)+1)
-	copy(cols, m.columns)
-	cols[len(m.columns)] = table.Column{Title: "", Width: 3}
+	cols[0] = table.Column{Title: "", Width: 3}
+	copy(cols[1:], m.columns)
 
 	// Preserve cursor position by name if possible
 	oldCursorName := ""
@@ -73,11 +71,11 @@ func (m *MultiSelectModel) buildRows(items []string) {
 			newCursor = len(rows)
 		}
 		m.itemMap[len(rows)] = name
-		marker := ""
+		marker := "[ ]"
 		if m.active[name] {
-			marker = "✓"
+			marker = "[✓]"
 		}
-		rows = append(rows, table.Row{name, marker})
+		rows = append(rows, table.Row{marker, name})
 	}
 
 	m.table = newTable(cols, rows, len(rows)+1)
@@ -156,16 +154,17 @@ func (m *MultiSelectModel) filterRows() {
 
 // View renders the multi-select dialog.
 func (m MultiSelectModel) View() string {
-	title := lipgloss.NewStyle().Bold(true).Render(m.title)
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render(m.footer)
+	title := theme.DialogTitle().Render(m.title)
+	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
-		body = lipgloss.NewStyle().Foreground(theme.FGHelp).Render("No results found")
+		body = theme.DialogHelp().Render("\nNo results found")
 	} else {
 		body = m.table.View()
 	}
 
-	content := title + "\n\n" + m.searchInput.View() + "\n" + body + "\n\n" + footer
+	search := theme.DialogSearch().Render(m.searchInput.View())
+	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

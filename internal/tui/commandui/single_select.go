@@ -6,7 +6,6 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -55,10 +54,10 @@ func NewSingleSelect(cfg SingleSelectConfig) SingleSelectModel {
 }
 
 func (m *SingleSelectModel) buildRows(items []SingleSelectItem, currentKey string) {
-	// Add a marker column to the configured columns
+	// Add a marker column as the first column
 	cols := make([]table.Column, len(m.columns)+1)
-	copy(cols, m.columns)
-	cols[len(m.columns)] = table.Column{Title: "", Width: 3}
+	cols[0] = table.Column{Title: "", Width: 1}
+	copy(cols[1:], m.columns)
 
 	m.itemMap = make(map[int]SingleSelectItem)
 	var rows []table.Row
@@ -71,15 +70,12 @@ func (m *SingleSelectModel) buildRows(items []SingleSelectItem, currentKey strin
 			initialCursor = i
 		}
 		row := make(table.Row, len(item.Columns)+1)
-		copy(row, item.Columns)
-		row[len(item.Columns)] = marker
+		row[0] = marker
+		copy(row[1:], item.Columns)
 		rows = append(rows, row)
 	}
 
-	height := len(rows) + 1
-	if height < 2 {
-		height = 2
-	}
+	height := max(len(rows)+1, 2)
 
 	m.table = newTable(cols, rows, height)
 	if len(rows) > 0 {
@@ -179,16 +175,17 @@ func (m *SingleSelectModel) Rebuild(items []SingleSelectItem, currentKey string)
 
 // View renders the single-select dialog.
 func (m SingleSelectModel) View() string {
-	title := lipgloss.NewStyle().Bold(true).Render(m.title)
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render(m.footer)
+	title := theme.DialogTitle().Render(m.title)
+	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
-		body = lipgloss.NewStyle().Foreground(theme.FGHelp).Render("No results found")
+		body = theme.DialogHelp().Render("\nNo results found")
 	} else {
 		body = m.table.View()
 	}
 
-	content := title + "\n\n" + m.searchInput.View() + "\n" + body + "\n\n" + footer
+	search := theme.DialogSearch().Render(m.searchInput.View())
+	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

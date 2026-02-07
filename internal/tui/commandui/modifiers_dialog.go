@@ -5,6 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 )
 
 type CommandDialogModifiersSelectedMsg struct {
@@ -16,7 +17,7 @@ func newModifiersMultiSelect(activeModifiers map[string]bool) MultiSelectModel {
 		Title:  "Modifiers",
 		Footer: "enter toggle, esc to apply",
 		Columns: []table.Column{
-			{Title: "", Width: 14},
+			{Title: "", Width: tui.DialogWidth - 9},
 		},
 		Items:  model.AllModifiers,
 		Active: activeModifiers,

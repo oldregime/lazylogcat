@@ -42,8 +42,7 @@ const (
 )
 
 var dialogStyle = func() lipgloss.Style {
-	return theme.ActivePanel().
-		Padding(1, 2).
+	return theme.Dialog().
 		Width(tui.DialogWidth).
 		MaxHeight(tui.DialogMaxHeight)
 }
@@ -125,8 +124,8 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 
 	columns := []table.Column{
 		{Title: "", Width: 16},
-		{Title: "", Width: 10},
-		{Title: "", Width: 10},
+		{Title: "", Width: tui.DialogWidth - 32},
+		{Title: "", Width: 8},
 	}
 
 	skipRows := make(map[int]bool)
@@ -466,16 +465,17 @@ func (m CommandDialogModel) View() string {
 }
 
 func (m CommandDialogModel) viewCommands() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Command List")
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
+	title := theme.DialogTitle().Render("Commands")
+	footer := theme.DialogHelp().Render("esc to close")
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
-		body = lipgloss.NewStyle().Foreground(theme.FGHelp).Render("No results found")
+		body = theme.DialogHelp().Render("\nNo results found")
 	} else {
 		body = m.table.View()
 	}
 
-	content := title + "\n\n" + m.searchInput.View() + "\n" + body + "\n\n" + footer
+	search := theme.DialogSearch().Render(m.searchInput.View())
+	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

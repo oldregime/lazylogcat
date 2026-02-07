@@ -31,7 +31,7 @@ var (
 	FGBorder = lipgloss.AdaptiveColor{Light: black, Dark: black}
 
 	// FGActiveBorder is used for active panel border highlighting
-	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
+	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightCyan, Dark: brightCyan}
 
 	// Foreground Colors - Text
 	// FGActiveTitle is used for active panel title text
@@ -39,6 +39,9 @@ var (
 
 	// FGSelected is used for selected item text
 	FGSelected = lipgloss.AdaptiveColor{Light: brightWhite, Dark: brightWhite}
+
+	FGTableRowSelected = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
+	BGTableRowSelected = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
 
 	// FGHelp is used for help text and secondary information
 	FGHelp = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
@@ -82,4 +85,46 @@ func Panel() lipgloss.Style {
 func ActivePanel() lipgloss.Style {
 	return Panel().
 		BorderForeground(FGActiveBorder)
+}
+
+func Dialog() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(FGActiveBorder).
+		Padding(1, 1)
+}
+
+// DialogTitle returns a style for dialog title text.
+func DialogTitle() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}).Padding(0, 1)
+}
+
+// DialogHelp returns a style for dialog help/footer text.
+func DialogHelp() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(FGHelp).Padding(0, 1)
+}
+
+// DialogError returns a style for dialog error text.
+func DialogError() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(FGError).Padding(0, 1)
+}
+
+// DialogSearch returns a style for dialog search/input wrappers.
+func DialogSearch() lipgloss.Style {
+	return lipgloss.NewStyle().Padding(0, 1)
+}
+
+// TableHeader returns a style for table header rows.
+func TableHeader() lipgloss.Style {
+	return lipgloss.NewStyle()
+}
+
+// TableCell returns a style for table cell content.
+func TableCell() lipgloss.Style {
+	return lipgloss.NewStyle().Padding(0, 1)
+}
+
+// TableSelected returns a style for the selected table row.
+func TableSelected() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(FGTableRowSelected).Background(BGTableRowSelected)
 }

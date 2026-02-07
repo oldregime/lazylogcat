@@ -3,7 +3,6 @@ package commandui
 import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -18,9 +17,9 @@ func newTable(columns []table.Column, rows []table.Row, height int) table.Model 
 	km.PageDown.SetEnabled(false)
 
 	s := table.Styles{
-		Header:   lipgloss.NewStyle(),
-		Cell:     lipgloss.NewStyle().Padding(0, 1),
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(theme.FGSelected).Background(theme.BGCursor),
+		Header:   theme.TableHeader(),
+		Cell:     theme.TableCell(),
+		Selected: theme.TableSelected(),
 	}
 
 	t := table.New(
