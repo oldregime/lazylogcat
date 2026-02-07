@@ -54,7 +54,7 @@ func (t ToastModel) View() string {
 		return ""
 	}
 	style := lipgloss.NewStyle().
-		Foreground(theme.FGHelp)
+		Foreground(theme.ColorMuted)
 	return style.Render(t.message)
 }
 

@@ -2,7 +2,9 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Package-private ANSI-16 base colors
+// ANSI-16 base colors (0-15).
+// These map to the terminal emulator's configured color scheme, ensuring
+// compatibility across themes without hardcoding hex values.
 const (
 	// Standard colors (0-7)
 	black   string = "0"
@@ -25,88 +27,91 @@ const (
 	brightWhite   string = "15"
 )
 
+// Semantic color palette.
+//
+// All colors use ANSI-16 indices so they inherit the terminal emulator's
+// configured theme. AdaptiveColor is used only where light and dark
+// backgrounds genuinely need different ANSI indices for readability.
 var (
-	// Foreground Colors - Borders
-	// FGBorder is used for inactive panel borders, dividers, and outlines
-	FGBorder = lipgloss.AdaptiveColor{Light: black, Dark: black}
+	// ColorPrimary is the main accent color for active borders, dialog titles,
+	// and other prominent interactive elements.
+	ColorPrimary = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
 
-	// FGActiveBorder is used for active panel border highlighting
-	FGActiveBorder = lipgloss.AdaptiveColor{Light: brightCyan, Dark: brightCyan}
+	// ColorMuted is for de-emphasized text such as help hints, inactive
+	// labels, and secondary information.
+	ColorMuted = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
 
-	// Foreground Colors - Text
-	// FGActiveTitle is used for active panel title text
-	FGActiveTitle = lipgloss.AdaptiveColor{Light: brightGreen, Dark: brightGreen}
+	// ColorDanger is for error messages and validation warnings.
+	ColorDanger = lipgloss.AdaptiveColor{Light: red, Dark: brightRed}
 
-	// FGSelected is used for selected item text
-	FGSelected = lipgloss.AdaptiveColor{Light: brightWhite, Dark: brightWhite}
+	// ColorBorder is for inactive panel borders, dividers, and outlines.
+	// brightBlack (8) provides visible contrast on both light and dark themes.
+	ColorBorder = lipgloss.Color(brightBlack)
 
-	FGTableRowSelected = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
-	BGTableRowSelected = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
+	// ColorVisualBG is the background for visual-mode selected lines.
+	ColorVisualBG = lipgloss.AdaptiveColor{Light: brightBlue, Dark: brightBlue}
 
-	// FGHelp is used for help text and secondary information
-	FGHelp = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
+	// ColorVisualFG is the foreground for visual-mode selected lines.
+	ColorVisualFG = lipgloss.AdaptiveColor{Light: black, Dark: black}
 
-	// FGError is used for error messages and validation warnings
-	FGError = lipgloss.AdaptiveColor{Light: brightRed, Dark: brightRed}
+	// ColorSelectedFG is the foreground for selected table rows.
+	ColorSelectedFG = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
 
-	// Background Colors
-	// BGCursor is used for cursor/selection highlight backgrounds
-	BGCursor = lipgloss.AdaptiveColor{Light: black, Dark: black}
+	// ColorSelectedBG is the background for selected table rows.
+	ColorSelectedBG = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
 )
 
-func GetLogColor(level string) lipgloss.AdaptiveColor {
+// GetLogColor returns a foreground color for the given logcat severity level.
+// Colors use plain ANSI indices (identical for light/dark) because the
+// terminal theme already provides appropriate shades for each index.
+func GetLogColor(level string) lipgloss.Color {
 	switch level {
 	case "V":
-		return lipgloss.AdaptiveColor{}
+		return ""
 	case "D":
-		return lipgloss.AdaptiveColor{Light: blue, Dark: blue}
+		return lipgloss.Color(blue)
 	case "I":
-		return lipgloss.AdaptiveColor{Light: green, Dark: green}
+		return lipgloss.Color(green)
 	case "W":
-		return lipgloss.AdaptiveColor{Light: yellow, Dark: yellow}
+		return lipgloss.Color(yellow)
 	case "E":
-		return lipgloss.AdaptiveColor{Light: red, Dark: red}
+		return lipgloss.Color(red)
 	case "F":
-		return lipgloss.AdaptiveColor{Light: magenta, Dark: magenta}
+		return lipgloss.Color(magenta)
 	default:
-		return lipgloss.AdaptiveColor{}
+		return ""
 	}
 }
 
-// Panel returns a base panel style with inactive border
+// Panel returns a base panel style with an inactive border.
 func Panel() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(FGBorder).
+		BorderForeground(ColorBorder).
 		Padding(0, 1)
 }
 
-// ActivePanel returns a panel style with active border highlighting
-func ActivePanel() lipgloss.Style {
-	return Panel().
-		BorderForeground(FGActiveBorder)
-}
-
+// Dialog returns a style for dialog overlays.
 func Dialog() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(FGActiveBorder).
+		BorderForeground(ColorPrimary).
 		Padding(1, 1)
 }
 
 // DialogTitle returns a style for dialog title text.
 func DialogTitle() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}).Padding(0, 1)
+	return lipgloss.NewStyle().Bold(true).Foreground(ColorPrimary).Padding(0, 1)
 }
 
 // DialogHelp returns a style for dialog help/footer text.
 func DialogHelp() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(FGHelp).Padding(0, 1)
+	return lipgloss.NewStyle().Foreground(ColorMuted).Padding(0, 1)
 }
 
 // DialogError returns a style for dialog error text.
 func DialogError() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(FGError).Padding(0, 1)
+	return lipgloss.NewStyle().Foreground(ColorDanger).Padding(0, 1)
 }
 
 // DialogSearch returns a style for dialog search/input wrappers.
@@ -126,5 +131,5 @@ func TableCell() lipgloss.Style {
 
 // TableSelected returns a style for the selected table row.
 func TableSelected() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(FGTableRowSelected).Background(BGTableRowSelected)
+	return lipgloss.NewStyle().Foreground(ColorSelectedFG).Background(ColorSelectedBG)
 }

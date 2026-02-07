@@ -339,9 +339,8 @@ func (m *LogcatViewModel) Render() {
 			line := strings.TrimSuffix(msg, "\n")
 			if selected {
 				styled := lipgloss.NewStyle().
-					Bold(true).
-					Background(theme.BGCursor).
-					Foreground(theme.FGSelected).
+					Background(theme.ColorVisualBG).
+					Foreground(theme.ColorVisualFG).
 					Width(m.viewport.Width).
 					Render(line)
 				b.WriteString(styled)
@@ -507,10 +506,6 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		return updateResult{needsRender: true}
 
 	case "esc":
-		if m.startSelected >= 0 {
-			m.startSelected = -1
-			return updateResult{needsRender: true}
-		}
 		m.visualMode = false
 		m.startSelected = -1
 		return updateResult{
@@ -697,7 +692,7 @@ func (m LogcatViewModel) footerView() string {
 	}
 
 	help := lipgloss.NewStyle().
-		Foreground(theme.FGHelp).
+		Foreground(theme.ColorMuted).
 		Width(m.viewport.Width).
 		AlignHorizontal(lipgloss.Center).
 		Padding(0, 2).
