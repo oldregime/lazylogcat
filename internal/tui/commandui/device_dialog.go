@@ -2,6 +2,7 @@ package commandui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,14 +17,14 @@ type CommandDialogDeviceSelectedMsg struct {
 	Device model.Device
 }
 
-func loadDevices(selectedDevice *model.Device) (table.Model, map[int]model.Device, error) {
+func loadDevices(selectedDevice *model.Device) (table.Model, map[int]model.Device, []model.Device, error) {
 	devices, err := util.GetConnectedDevices()
 	if err != nil {
-		return table.Model{}, nil, fmt.Errorf("failed to get devices: %w", err)
+		return table.Model{}, nil, nil, fmt.Errorf("failed to get devices: %w", err)
 	}
 
 	t, dm := newDeviceTable(devices, selectedDevice)
-	return t, dm, nil
+	return t, dm, devices, nil
 }
 
 func newDeviceTable(devices []model.Device, selectedDevice *model.Device) (table.Model, map[int]model.Device) {
@@ -68,10 +69,15 @@ func newDeviceTable(devices []model.Device, selectedDevice *model.Device) (table
 
 func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
 	if key == "r" {
-		deviceTable, deviceMap, err := loadDevices(m.selectedDevice)
+		deviceTable, deviceMap, allDevices, err := loadDevices(m.selectedDevice)
 		m.deviceTable = deviceTable
 		m.deviceMap = deviceMap
+		m.allDevices = allDevices
 		m.deviceErr = err
+		// Reapply current filter after refresh
+		if m.searchInput.Value() != "" {
+			m.filterDeviceRows()
+		}
 		return m, nil
 	}
 
@@ -82,10 +88,40 @@ func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDi
 		return m, nil
 	}
 
-	if len(m.deviceMap) > 0 {
-		m.deviceTable, _ = m.deviceTable.Update(msg)
+	// Arrow keys go to table navigation
+	if key == "up" || key == "down" {
+		if len(m.deviceMap) > 0 {
+			m.deviceTable, _ = m.deviceTable.Update(msg)
+		}
+		return m, nil
 	}
+
+	// All other keys go to the search input
+	prevValue := m.searchInput.Value()
+	m.searchInput, _ = m.searchInput.Update(msg)
+	if m.searchInput.Value() != prevValue {
+		m.filterDeviceRows()
+	}
+
 	return m, nil
+}
+
+func (m *CommandDialogModel) filterDeviceRows() {
+	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
+
+	var filtered []model.Device
+	for _, device := range m.allDevices {
+		if query != "" &&
+			!strings.Contains(strings.ToLower(device.Name), query) &&
+			!strings.Contains(strings.ToLower(device.Id), query) {
+			continue
+		}
+		filtered = append(filtered, device)
+	}
+
+	t, dm := newDeviceTable(filtered, m.selectedDevice)
+	m.deviceTable = t
+	m.deviceMap = dm
 }
 
 func (m CommandDialogModel) viewDevices() string {
@@ -100,7 +136,7 @@ func (m CommandDialogModel) viewDevices() string {
 			Foreground(theme.FGHelp).
 			Render("Press 'r' to retry")
 		body = "\n" + errorMsg + "\n\n" + hint
-	} else if len(m.deviceMap) == 0 {
+	} else if len(m.allDevices) == 0 {
 		emptyMsg := lipgloss.NewStyle().
 			Foreground(theme.FGHelp).
 			Render("No devices connected.")
@@ -108,11 +144,20 @@ func (m CommandDialogModel) viewDevices() string {
 			Foreground(theme.FGHelp).
 			Render("Press 'r' to refresh")
 		body = "\n" + emptyMsg + "\n\n" + hint
+	} else if len(m.deviceMap) == 0 && m.searchInput.Value() != "" {
+		body = lipgloss.NewStyle().Foreground(theme.FGHelp).Render("No results found")
 	} else {
 		body = m.deviceTable.View()
 	}
 
 	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close • r refresh")
-	content := title + "\n" + body + "\n" + footer
+
+	// Show search input only when there are devices to search through
+	if m.deviceErr == nil && len(m.allDevices) > 0 {
+		content := title + "\n\n" + m.searchInput.View() + "\n" + body + "\n\n" + footer
+		return dialogStyle().Render(content)
+	}
+
+	content := title + "\n\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

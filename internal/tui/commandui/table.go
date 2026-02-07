@@ -2,6 +2,7 @@ package commandui
 
 import (
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -51,4 +52,18 @@ func truncateMiddle(s string, maxWidth int) string {
 	}
 
 	return ansi.Truncate(s, left, "") + "…" + suffix
+}
+
+func newSearchInput() textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = "Search"
+	ti.CharLimit = 50
+	ti.Width = 35
+	ti.Prompt = ""
+	ti.Focus()
+	return ti
+}
+
+func resetSearchInput(ti *textinput.Model) {
+	ti.SetValue("")
 }
