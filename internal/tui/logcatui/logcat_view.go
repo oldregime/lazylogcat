@@ -29,7 +29,7 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "Commands: Ctrl+P • Jump to recent: Shift+G • Clear: Shift+C • Visual: v"
+	helpTextNormal = "Commands: Ctrl+p • Jump to recent: Shift+G • Clear: Shift+C • Visual: v"
 	helpTextVisual = "Multiline: Shift+V • Copy: y • Exit visual: ESC"
 )
 

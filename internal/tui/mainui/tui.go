@@ -59,16 +59,8 @@ func InitMainModel(c config.Config) MainModel {
 	m.filter = util.FilterFromConfig(&c)
 	m.outputPrefs = model.OutputPrefs{
 		Color:    util.ColorFromConfig(&c),
-		SoftWrap: true,
-		Columns: model.Columns{
-			Date:    true,
-			Time:    true,
-			PID:     true,
-			TID:     true,
-			Level:   true,
-			Tag:     true,
-			Message: true,
-		},
+		SoftWrap: util.WrapFromConfig(&c),
+		Columns:  util.ColumnsFromConfig(&c),
 	}
 
 	// Always start in logcat view

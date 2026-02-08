@@ -30,12 +30,33 @@ func compareBoolPtr(t *testing.T, field string, got, want *bool) {
 	}
 }
 
+// compareColumns compares two *Columns values and reports detailed errors.
+func compareColumns(t *testing.T, got, want *Columns) {
+	t.Helper()
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Errorf("Display.Columns = %v, want %v", got, want)
+		return
+	}
+	compareBoolPtr(t, "Display.Columns.Date", got.Date, want.Date)
+	compareBoolPtr(t, "Display.Columns.Time", got.Time, want.Time)
+	compareBoolPtr(t, "Display.Columns.PID", got.PID, want.PID)
+	compareBoolPtr(t, "Display.Columns.TID", got.TID, want.TID)
+	compareBoolPtr(t, "Display.Columns.Level", got.Level, want.Level)
+	compareBoolPtr(t, "Display.Columns.Tag", got.Tag, want.Tag)
+	compareBoolPtr(t, "Display.Columns.Message", got.Message, want.Message)
+}
+
 // compareConfigs compares two Config structs field by field and reports detailed errors.
 func compareConfigs(t *testing.T, got, want Config) {
 	t.Helper()
 
 	// Compare Display
 	compareBoolPtr(t, "Display.Color", got.Display.Color, want.Display.Color)
+	compareBoolPtr(t, "Display.Wrap", got.Display.Wrap, want.Display.Wrap)
+	compareColumns(t, got.Display.Columns, want.Display.Columns)
 
 	// Compare Filter
 	if got.Filter.Pkg != want.Filter.Pkg {
@@ -74,6 +95,39 @@ func TestDefaultConfig(t *testing.T) {
 		}
 		if *got.Display.Color != true {
 			t.Errorf("Display.Color = %v, want true", *got.Display.Color)
+		}
+		if got.Display.Wrap == nil {
+			t.Fatalf("Display.Wrap = nil, want non-nil")
+		}
+		if *got.Display.Wrap != true {
+			t.Errorf("Display.Wrap = %v, want true", *got.Display.Wrap)
+		}
+	})
+
+	t.Run("Columns", func(t *testing.T) {
+		cols := got.Display.Columns
+		if cols == nil {
+			t.Fatalf("Display.Columns = nil, want non-nil")
+		}
+		checks := []struct {
+			name string
+			got  *bool
+			want bool
+		}{
+			{"Date", cols.Date, false},
+			{"Time", cols.Time, true},
+			{"PID", cols.PID, false},
+			{"TID", cols.TID, false},
+			{"Level", cols.Level, true},
+			{"Tag", cols.Tag, true},
+			{"Message", cols.Message, true},
+		}
+		for _, c := range checks {
+			if c.got == nil {
+				t.Errorf("Columns.%s = nil, want %v", c.name, c.want)
+			} else if *c.got != c.want {
+				t.Errorf("Columns.%s = %v, want %v", c.name, *c.got, c.want)
+			}
 		}
 	})
 
@@ -187,7 +241,12 @@ func TestLoadFile(t *testing.T) {
 			name: "FullConfig",
 			jsonData: `{
   "display": {
-    "color": false
+    "color": false,
+    "wrap": false,
+    "columns": {
+      "date": true, "time": true, "pid": true, "tid": true,
+      "level": true, "tag": true, "message": true
+    }
   },
   "filter": {
     "package_name": "com.example.app",
@@ -198,6 +257,11 @@ func TestLoadFile(t *testing.T) {
 			wantConfig: Config{
 				Display: Display{
 					Color: boolPtr(false),
+					Wrap:  boolPtr(false),
+					Columns: &Columns{
+						Date: boolPtr(true), Time: boolPtr(true), PID: boolPtr(true), TID: boolPtr(true),
+						Level: boolPtr(true), Tag: boolPtr(true), Message: boolPtr(true),
+					},
 				},
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example.app"},
@@ -257,6 +321,54 @@ func TestLoadFile(t *testing.T) {
 			name:       "CompactJSON",
 			jsonData:   `{"display":{"color":true},"filter":{"package_name":"com.example.app"}}`,
 			wantConfig: Config{Display: Display{Color: boolPtr(true)}, Filter: Filter{Pkg: TextFilter{Value: "com.example.app"}}},
+		},
+		{
+			name:     "WrapTrue",
+			jsonData: `{"display": {"wrap": true}}`,
+			wantConfig: Config{
+				Display: Display{Wrap: boolPtr(true)},
+			},
+		},
+		{
+			name:     "WrapFalse",
+			jsonData: `{"display": {"wrap": false}}`,
+			wantConfig: Config{
+				Display: Display{Wrap: boolPtr(false)},
+			},
+		},
+		{
+			name: "FullColumns",
+			jsonData: `{"display": {"columns": {
+				"date": true, "time": false, "pid": true, "tid": true,
+				"level": false, "tag": false, "message": true
+			}}}`,
+			wantConfig: Config{
+				Display: Display{
+					Columns: &Columns{
+						Date: boolPtr(true), Time: boolPtr(false), PID: boolPtr(true), TID: boolPtr(true),
+						Level: boolPtr(false), Tag: boolPtr(false), Message: boolPtr(true),
+					},
+				},
+			},
+		},
+		{
+			name:     "PartialColumns",
+			jsonData: `{"display": {"columns": {"pid": true}}}`,
+			wantConfig: Config{
+				Display: Display{
+					Columns: &Columns{PID: boolPtr(true)},
+				},
+			},
+		},
+		{
+			name:     "WrapAndColumns",
+			jsonData: `{"display": {"wrap": false, "columns": {"date": true, "tid": true}}}`,
+			wantConfig: Config{
+				Display: Display{
+					Wrap:    boolPtr(false),
+					Columns: &Columns{Date: boolPtr(true), TID: boolPtr(true)},
+				},
+			},
 		},
 	}
 
@@ -366,16 +478,14 @@ func TestMerge(t *testing.T) {
 					Txt: TextFilter{Value: "error"},
 				},
 			},
-			want: Config{
-				Display: Display{
-					Color: boolPtr(false),
-				},
-				Filter: Filter{
-					Pkg: TextFilter{Value: "com.example"},
-					Tag: TextFilter{Value: "MyTag"},
-					Txt: TextFilter{Value: "error"},
-				},
-			},
+			want: func() Config {
+				c := DefaultConfig()
+				*c.Display.Color = false
+				c.Filter.Pkg = TextFilter{Value: "com.example"}
+				c.Filter.Tag = TextFilter{Value: "MyTag"}
+				c.Filter.Txt = TextFilter{Value: "error"}
+				return c
+			}(),
 		},
 		{
 			name: "PartialOverlay_ColorOnly",
@@ -383,11 +493,11 @@ func TestMerge(t *testing.T) {
 			overlay: Config{
 				Display: Display{Color: boolPtr(false)},
 			},
-			want: Config{
-				Display: Display{
-					Color: boolPtr(false),
-				},
-			},
+			want: func() Config {
+				c := DefaultConfig()
+				*c.Display.Color = false
+				return c
+			}(),
 		},
 		{
 			name: "PartialOverlay_FilterOnly",
@@ -397,14 +507,11 @@ func TestMerge(t *testing.T) {
 					Pkg: TextFilter{Value: "com.example"},
 				},
 			},
-			want: Config{
-				Display: Display{
-					Color: boolPtr(true),
-				},
-				Filter: Filter{
-					Pkg: TextFilter{Value: "com.example"},
-				},
-			},
+			want: func() Config {
+				c := DefaultConfig()
+				c.Filter.Pkg = TextFilter{Value: "com.example"}
+				return c
+			}(),
 		},
 		{
 			name: "NilColorPreservesBase",
@@ -475,6 +582,55 @@ func TestMerge(t *testing.T) {
 				Filter:  Filter{Pkg: TextFilter{Value: "com.example"}},
 			},
 		},
+		{
+			name: "WrapOverridesBase",
+			base: Config{
+				Display: Display{Wrap: boolPtr(true)},
+			},
+			overlay: Config{
+				Display: Display{Wrap: boolPtr(false)},
+			},
+			want: Config{
+				Display: Display{Wrap: boolPtr(false)},
+			},
+		},
+		{
+			name: "NilWrapPreservesBase",
+			base: Config{
+				Display: Display{Wrap: boolPtr(true)},
+			},
+			overlay: Config{},
+			want: Config{
+				Display: Display{Wrap: boolPtr(true)},
+			},
+		},
+		{
+			name: "PartialColumnsOverlay",
+			base: DefaultConfig(),
+			overlay: Config{
+				Display: Display{
+					Columns: &Columns{PID: boolPtr(true), Date: boolPtr(true)},
+				},
+			},
+			want: func() Config {
+				c := DefaultConfig()
+				*c.Display.Columns.PID = true
+				*c.Display.Columns.Date = true
+				return c
+			}(),
+		},
+		{
+			name: "NilColumnsPreservesBase",
+			base: DefaultConfig(),
+			overlay: Config{
+				Display: Display{Wrap: boolPtr(false)},
+			},
+			want: func() Config {
+				c := DefaultConfig()
+				*c.Display.Wrap = false
+				return c
+			}(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -524,14 +680,9 @@ func TestResolve(t *testing.T) {
 			t.Errorf("Resolve() error = %v, want nil", err)
 		}
 
-		want := Config{
-			Display: Display{
-				Color: boolPtr(false),
-			},
-			Filter: Filter{
-				Pkg: TextFilter{Value: "com.project"},
-			},
-		}
+		want := DefaultConfig()
+		*want.Display.Color = false
+		want.Filter.Pkg = TextFilter{Value: "com.project"}
 		compareConfigs(t, got, want)
 	})
 
@@ -556,15 +707,10 @@ func TestResolve(t *testing.T) {
 			t.Errorf("Resolve() error = %v, want nil", err)
 		}
 
-		want := Config{
-			Display: Display{
-				Color: boolPtr(false), // From project
-			},
-			Filter: Filter{
-				Pkg: TextFilter{Value: "com.local"},  // Overridden by local
-				Tag: TextFilter{Value: "ProjectTag"}, // From project
-			},
-		}
+		want := DefaultConfig()
+		*want.Display.Color = false                       // From project
+		want.Filter.Pkg = TextFilter{Value: "com.local"}  // Overridden by local
+		want.Filter.Tag = TextFilter{Value: "ProjectTag"} // From project
 		compareConfigs(t, got, want)
 	})
 
@@ -589,14 +735,8 @@ func TestResolve(t *testing.T) {
 		}
 
 		// Local config should still be applied over defaults
-		want := Config{
-			Display: Display{
-				Color: boolPtr(true), // From defaults
-			},
-			Filter: Filter{
-				Pkg: TextFilter{Value: "com.local"},
-			},
-		}
+		want := DefaultConfig()
+		want.Filter.Pkg = TextFilter{Value: "com.local"}
 		compareConfigs(t, got, want)
 	})
 
@@ -630,16 +770,40 @@ func TestResolve(t *testing.T) {
 			t.Errorf("Resolve() error = %v, want nil", err)
 		}
 
-		want := Config{
-			Display: Display{
-				Color: boolPtr(true), // Overridden by local
-			},
-			Filter: Filter{
-				Pkg: TextFilter{Value: "com.project"},  // From project
-				Tag: TextFilter{Value: "LocalTag"},     // Overridden by local
-				Txt: TextFilter{Value: "project_text"}, // From project
-			},
+		want := DefaultConfig()
+		*want.Display.Color = true                          // Overridden by local
+		want.Filter.Pkg = TextFilter{Value: "com.project"}  // From project
+		want.Filter.Tag = TextFilter{Value: "LocalTag"}     // Overridden by local
+		want.Filter.Txt = TextFilter{Value: "project_text"} // From project
+		compareConfigs(t, got, want)
+	})
+
+	t.Run("ColumnsPartialOverride", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("Failed to chdir: %v", err)
 		}
+		defer os.Chdir(origDir)
+
+		// Project enables PID and Date columns
+		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.json", `{
+			"display": {"columns": {"pid": true, "date": true}}
+		}`)
+
+		// Local disables wrap and re-disables Date
+		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.local.json", `{
+			"display": {"wrap": false, "columns": {"date": false}}
+		}`)
+
+		got, err := Resolve()
+		if err != nil {
+			t.Errorf("Resolve() error = %v, want nil", err)
+		}
+
+		want := DefaultConfig()
+		*want.Display.Wrap = false
+		*want.Display.Columns.PID = true   // From project
+		*want.Display.Columns.Date = false // Overridden by local
 		compareConfigs(t, got, want)
 	})
 }
@@ -660,6 +824,11 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 	config := Config{
 		Display: Display{
 			Color: boolPtr(true),
+			Wrap:  boolPtr(true),
+			Columns: &Columns{
+				Date: boolPtr(true), Time: boolPtr(true), PID: boolPtr(true), TID: boolPtr(true),
+				Level: boolPtr(true), Tag: boolPtr(true), Message: boolPtr(true),
+			},
 		},
 		Filter: Filter{
 			Pkg: TextFilter{Value: "pkg"},
@@ -679,6 +848,15 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 		`"display"`,
 		`"filter"`,
 		`"color"`,
+		`"wrap"`,
+		`"columns"`,
+		`"date"`,
+		`"time"`,
+		`"pid"`,
+		`"tid"`,
+		`"level"`,
+		`"tag"`,
+		`"message"`,
 		`"package_name"`,
 		`"log_tag"`,
 		`"log_text"`,

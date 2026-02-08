@@ -110,8 +110,17 @@ Each layer overrides the previous. All fields are optional. See the [JSON Schema
 {
   "$schema": "https://github.com/parfenovvs/lazylogcat/raw/trunk/config.schema.json",
   "display": {
-    "log_format": "time",
-    "log_modifiers": ["color"]
+    "color": true,
+    "wrap": true,
+    "columns": {
+      "date": false,
+      "time": true,
+      "pid": false,
+      "tid": false,
+      "level": true,
+      "tag": true,
+      "message": true
+    }
   },
   "filter": {
     "package_name": "com.example.app",

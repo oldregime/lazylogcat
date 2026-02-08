@@ -19,6 +19,53 @@
           "type": "boolean",
           "description": "Enable log colorization by level.",
           "default": true
+        },
+        "wrap": {
+          "type": "boolean",
+          "description": "Enable soft-wrapping of long log lines to fit the terminal width.",
+          "default": true
+        },
+        "columns": {
+          "type": "object",
+          "description": "Controls which fields of a parsed log line are visible.",
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "type": "boolean",
+              "description": "Show the date column.",
+              "default": false
+            },
+            "time": {
+              "type": "boolean",
+              "description": "Show the time column.",
+              "default": true
+            },
+            "pid": {
+              "type": "boolean",
+              "description": "Show the PID (process ID) column.",
+              "default": false
+            },
+            "tid": {
+              "type": "boolean",
+              "description": "Show the TID (thread ID) column.",
+              "default": false
+            },
+            "level": {
+              "type": "boolean",
+              "description": "Show the log level column.",
+              "default": true
+            },
+            "tag": {
+              "type": "boolean",
+              "description": "Show the log tag column.",
+              "default": true
+            },
+            "message": {
+              "type": "boolean",
+              "description": "Show the message column.",
+              "default": true
+            }
+          }
         }
       }
     },

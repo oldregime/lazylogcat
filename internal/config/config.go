@@ -18,7 +18,20 @@ type Config struct {
 
 // Display holds user preferences for log output appearance.
 type Display struct {
-	Color *bool `json:"color,omitempty"`
+	Color   *bool    `json:"color,omitempty"`
+	Wrap    *bool    `json:"wrap,omitempty"`
+	Columns *Columns `json:"columns,omitempty"`
+}
+
+// Columns controls which fields of a parsed log line are visible.
+type Columns struct {
+	Date    *bool `json:"date,omitempty"`
+	Time    *bool `json:"time,omitempty"`
+	PID     *bool `json:"pid,omitempty"`
+	TID     *bool `json:"tid,omitempty"`
+	Level   *bool `json:"level,omitempty"`
+	Tag     *bool `json:"tag,omitempty"`
+	Message *bool `json:"message,omitempty"`
 }
 
 // Filter holds log filtering parameters.
@@ -63,12 +76,26 @@ func (f TextFilter) MarshalJSON() ([]byte, error) {
 
 // DefaultConfig returns the default configuration with sensible defaults.
 func DefaultConfig() Config {
-	color := true
 	return Config{
 		Display: Display{
-			Color: &color,
+			Color: ptrBool(true),
+			Wrap:  ptrBool(true),
+			Columns: &Columns{
+				Date:    ptrBool(false),
+				Time:    ptrBool(true),
+				PID:     ptrBool(false),
+				TID:     ptrBool(false),
+				Level:   ptrBool(true),
+				Tag:     ptrBool(true),
+				Message: ptrBool(true),
+			},
 		},
 	}
+}
+
+// ptrBool returns a pointer to a new bool value.
+func ptrBool(v bool) *bool {
+	return &v
 }
 
 // String returns a JSON string representation of the config for logging.
@@ -146,12 +173,23 @@ func loadFile(path string) (Config, error) {
 // Strings: non-empty overlay replaces base.
 // Slices: non-nil overlay replaces base entirely ([] explicitly clears).
 // TextFilter: non-zero overlay replaces base.
+// *bool: non-nil overlay replaces base.
 func merge(base, overlay Config) Config {
 	result := base
 
 	// Display
 	if overlay.Display.Color != nil {
 		result.Display.Color = overlay.Display.Color
+	}
+	if overlay.Display.Wrap != nil {
+		result.Display.Wrap = overlay.Display.Wrap
+	}
+	if overlay.Display.Columns != nil {
+		if result.Display.Columns != nil {
+			copied := *result.Display.Columns
+			result.Display.Columns = &copied
+		}
+		mergeColumns(result.Display.Columns, overlay.Display.Columns)
 	}
 
 	// Filter
@@ -166,4 +204,32 @@ func merge(base, overlay Config) Config {
 	}
 
 	return result
+}
+
+// mergeColumns applies non-nil fields from overlay on top of base.
+func mergeColumns(base, overlay *Columns) {
+	if base == nil || overlay == nil {
+		return
+	}
+	if overlay.Date != nil {
+		base.Date = overlay.Date
+	}
+	if overlay.Time != nil {
+		base.Time = overlay.Time
+	}
+	if overlay.PID != nil {
+		base.PID = overlay.PID
+	}
+	if overlay.TID != nil {
+		base.TID = overlay.TID
+	}
+	if overlay.Level != nil {
+		base.Level = overlay.Level
+	}
+	if overlay.Tag != nil {
+		base.Tag = overlay.Tag
+	}
+	if overlay.Message != nil {
+		base.Message = overlay.Message
+	}
 }
