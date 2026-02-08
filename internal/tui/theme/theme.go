@@ -30,35 +30,33 @@ const (
 // Semantic color palette.
 //
 // All colors use ANSI-16 indices so they inherit the terminal emulator's
-// configured theme. AdaptiveColor is used only where light and dark
-// backgrounds genuinely need different ANSI indices for readability.
+// configured theme. The terminal's color scheme handles light/dark adaptation.
 var (
 	// ColorPrimary is the main accent color for active borders, dialog titles,
 	// and other prominent interactive elements.
-	ColorPrimary = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
+	ColorPrimary = lipgloss.Color(brightCyan)
 
 	// ColorMuted is for de-emphasized text such as help hints, inactive
 	// labels, and secondary information.
-	ColorMuted = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
+	ColorMuted = lipgloss.Color(brightBlack)
 
 	// ColorDanger is for error messages and validation warnings.
-	ColorDanger = lipgloss.AdaptiveColor{Light: red, Dark: brightRed}
+	ColorDanger = lipgloss.Color(brightRed)
 
 	// ColorBorder is for inactive panel borders, dividers, and outlines.
-	// brightBlack (8) provides visible contrast on both light and dark themes.
 	ColorBorder = lipgloss.Color(brightBlack)
 
 	// ColorVisualBG is the background for visual-mode selected lines.
-	ColorVisualBG = lipgloss.AdaptiveColor{Light: yellow, Dark: yellow}
+	ColorVisualBG = lipgloss.Color(yellow)
 
 	// ColorVisualFG is the foreground for visual-mode selected lines.
-	ColorVisualFG = lipgloss.AdaptiveColor{Light: black, Dark: black}
+	ColorVisualFG = lipgloss.Color(black)
 
 	// ColorSelectedFG is the foreground for selected table rows.
-	ColorSelectedFG = lipgloss.AdaptiveColor{Light: black, Dark: brightBlack}
+	ColorSelectedFG = lipgloss.Color(brightBlack)
 
 	// ColorSelectedBG is the background for selected table rows.
-	ColorSelectedBG = lipgloss.AdaptiveColor{Light: cyan, Dark: brightCyan}
+	ColorSelectedBG = lipgloss.Color(brightCyan)
 )
 
 // GetLogColor returns a foreground color for the given logcat severity level.
