@@ -39,7 +39,7 @@ func newDeviceSingleSelect(devices []model.Device, selectedDevice *model.Device)
 	}
 	return NewSingleSelect(SingleSelectConfig{
 		Title:  "Select Device",
-		Footer: "esc to close \u2022 r refresh",
+		Footer: "Refresh: r",
 		Columns: []table.Column{
 			{Title: "", Width: 14},
 			{Title: "", Width: tui.DialogWidth - 23},
@@ -84,27 +84,27 @@ func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDi
 
 func (m CommandDialogModel) viewDevices() string {
 	// Devices has special error/empty states, so we render manually instead of using singleSelect.View()
-	title := theme.DialogTitle().Render("Select Device")
+	title := dialogTitleWithESC("Select Device")
 
 	var body string
 	if m.deviceErr != nil {
 		errorMsg := theme.DialogHelp().
 			Render(fmt.Sprintf("Error: %s", m.deviceErr.Error()))
 		hint := theme.DialogHelp().
-			Render("Press 'r' to retry")
+			Render("Retry: r")
 		body = "\n" + errorMsg + "\n\n" + hint
 	} else if len(m.allDevices) == 0 {
 		emptyMsg := theme.DialogHelp().
 			Render("No devices connected.")
 		hint := theme.DialogHelp().
-			Render("Press 'r' to refresh")
+			Render("Refresh: r")
 		body = "\n" + emptyMsg + "\n\n" + hint
 	} else {
 		// Delegate to singleSelect.View() when we have devices
 		return m.singleSelect.View()
 	}
 
-	footer := theme.DialogHelp().Render("esc to close \u2022 r refresh")
+	footer := theme.DialogHelp().Render("Refresh: r")
 	content := title + "\n\n" + body + "\n\n" + footer
 	return dialogStyle().Render(content)
 }

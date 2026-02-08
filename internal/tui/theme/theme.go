@@ -131,5 +131,5 @@ func TableCell() lipgloss.Style {
 
 // TableSelected returns a style for the selected table row.
 func TableSelected() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(ColorSelectedFG).Background(ColorSelectedBG)
+	return lipgloss.NewStyle().Bold(true).Foreground(ColorSelectedFG).Background(ColorSelectedBG)
 }

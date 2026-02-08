@@ -154,7 +154,7 @@ func (m *MultiSelectModel) filterRows() {
 
 // View renders the multi-select dialog.
 func (m MultiSelectModel) View() string {
-	title := theme.DialogTitle().Render(m.title)
+	title := dialogTitleWithESC(m.title)
 	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string

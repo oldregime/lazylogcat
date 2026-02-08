@@ -38,9 +38,6 @@ func NewTextInput(cfg TextInputConfig) TextInputModel {
 	ti.Focus()
 
 	footer := cfg.Footer
-	if footer == "" {
-		footer = "enter to apply, esc to cancel"
-	}
 
 	return TextInputModel{
 		title:      cfg.Title,
@@ -97,7 +94,7 @@ func (m TextInputModel) Value() string {
 
 // View renders the text input dialog.
 func (m TextInputModel) View() string {
-	title := theme.DialogTitle().Render(m.title)
+	title := dialogTitleWithESC(m.title)
 	footer := theme.DialogHelp().Render(m.footer)
 
 	var errorLine string

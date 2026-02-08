@@ -29,8 +29,8 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+p commands • G jump to recent • C clear • v visual"
-	helpTextVisual = "j/↓ down • k/↑ up • shift+V select multiple • y copy • esc to normal"
+	helpTextNormal = "Commands: Ctrl+P • Jump to recent: Shift+G • Clear: Shift+C • Visual: v"
+	helpTextVisual = "Multiline: Shift+V • Copy: y • Exit visual: ESC"
 )
 
 // shortcutMap maps the second key of a ctrl+x shortcut to its CommandData.
@@ -172,7 +172,7 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 
 	headerHeight := lipgloss.Height(m.headerView())
 	footerHeight := lipgloss.Height(m.footerView())
-	vp := viewport.New(parentSize.Width, parentSize.Height-footerHeight-headerHeight-1)
+	vp := viewport.New(parentSize.Width, parentSize.Height-footerHeight-headerHeight)
 	m.viewport = vp
 
 	return m

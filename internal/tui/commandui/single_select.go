@@ -175,7 +175,7 @@ func (m *SingleSelectModel) Rebuild(items []SingleSelectItem, currentKey string)
 
 // View renders the single-select dialog.
 func (m SingleSelectModel) View() string {
-	title := theme.DialogTitle().Render(m.title)
+	title := dialogTitleWithESC(m.title)
 	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string

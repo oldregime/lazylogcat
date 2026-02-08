@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -42,6 +43,22 @@ var dialogStyle = func() lipgloss.Style {
 	return theme.Dialog().
 		Width(tui.DialogWidth).
 		MaxHeight(tui.DialogMaxHeight)
+}
+
+// dialogTitleWithESC renders a title line with "ESC" right-aligned.
+// Used by all dialog View() methods to show the dismiss hint in the title bar.
+func dialogTitleWithESC(title string) string {
+	titleStr := theme.DialogTitle().Render(title)
+	escStr := theme.DialogHelp().Render("ESC")
+	// innerWidth = DialogWidth - border(2) - padding(2)
+	innerWidth := tui.DialogWidth - 4
+	titleWidth := ansi.StringWidth(titleStr)
+	rightWidth := innerWidth - titleWidth
+	rightPart := lipgloss.NewStyle().
+		Width(rightWidth).
+		AlignHorizontal(lipgloss.Right).
+		Render(escStr)
+	return titleStr + rightPart
 }
 
 type CommandDialogModel struct {
@@ -434,8 +451,8 @@ func (m CommandDialogModel) View() string {
 }
 
 func (m CommandDialogModel) viewCommands() string {
-	title := theme.DialogTitle().Render("Commands")
-	footer := theme.DialogHelp().Render("esc to close")
+	title := dialogTitleWithESC("Commands")
+	footer := theme.DialogHelp().Render("")
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {

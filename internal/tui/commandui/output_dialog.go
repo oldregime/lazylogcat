@@ -57,7 +57,7 @@ func newOutputMultiSelect(prefs model.OutputPrefs) MultiSelectModel {
 	}
 	return NewMultiSelect(MultiSelectConfig{
 		Title:   "Output",
-		Footer:  "space/enter to toggle · esc to apply",
+		Footer:  "",
 		Columns: []table.Column{{Title: "", Width: tui.DialogWidth - 9}},
 		Items:   outputMultiSelectItems,
 		Active:  active,

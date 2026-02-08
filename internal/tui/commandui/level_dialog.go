@@ -34,7 +34,7 @@ func newLevelSingleSelect(currentLevel model.Level) SingleSelectModel {
 	}
 	return NewSingleSelect(SingleSelectConfig{
 		Title:  "Log Level",
-		Footer: "esc to close",
+		Footer: "",
 		Columns: []table.Column{
 			{Title: "", Width: 1},
 			{Title: "", Width: tui.DialogWidth - 10},
