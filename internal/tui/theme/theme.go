@@ -49,7 +49,7 @@ var (
 	ColorBorder = lipgloss.Color(brightBlack)
 
 	// ColorVisualBG is the background for visual-mode selected lines.
-	ColorVisualBG = lipgloss.AdaptiveColor{Light: brightBlue, Dark: brightBlue}
+	ColorVisualBG = lipgloss.AdaptiveColor{Light: yellow, Dark: yellow}
 
 	// ColorVisualFG is the foreground for visual-mode selected lines.
 	ColorVisualFG = lipgloss.AdaptiveColor{Light: black, Dark: black}

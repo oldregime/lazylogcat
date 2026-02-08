@@ -105,7 +105,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.windowSize = model.Size{
-			Width:  msg.Width - 1,
+			Width:  msg.Width,
 			Height: msg.Height,
 		}
 		return m, func() tea.Msg {
