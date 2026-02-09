@@ -53,7 +53,7 @@ var (
 	ColorVisualFG = lipgloss.Color(black)
 
 	// ColorSelectedFG is the foreground for selected table rows.
-	ColorSelectedFG = lipgloss.Color(brightBlack)
+	ColorSelectedFG = lipgloss.Color(black)
 
 	// ColorSelectedBG is the background for selected table rows.
 	ColorSelectedBG = lipgloss.Color(brightCyan)
@@ -130,4 +130,12 @@ func TableCell() lipgloss.Style {
 // TableSelected returns a style for the selected table row.
 func TableSelected() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(ColorSelectedFG).Background(ColorSelectedBG)
+}
+
+// FilterBadge returns a style for active filter labels in the header.
+func FilterBadge() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(ColorSelectedFG).
+		Background(ColorSelectedBG).
+		Padding(0, 1)
 }

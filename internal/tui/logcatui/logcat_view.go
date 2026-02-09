@@ -708,25 +708,25 @@ func (m LogcatViewModel) headerView() string {
 	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
 
 	// Build filter parts: package, tag, content (text), log level
-	bold := lipgloss.NewStyle().Bold(true)
+	badge := theme.FilterBadge()
 	var filters []string
 	if !m.filter.PackageName.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("pkg%s%s", filterModeSep(m.filter.PackageName.Mode), bold.Render(m.filter.PackageName.Value)))
+		filters = append(filters, badge.Render(fmt.Sprintf("pkg%s%s", filterModeSep(m.filter.PackageName.Mode), m.filter.PackageName.Value)))
 	}
 	if m.filter.Level != "" && m.filter.Level != model.LvlV {
-		filters = append(filters, fmt.Sprintf("lvl:%s", bold.Render(string(m.filter.Level))))
+		filters = append(filters, badge.Render(fmt.Sprintf("lvl:%s", string(m.filter.Level))))
 	}
 	if !m.filter.Tag.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("tag%s%s", filterModeSep(m.filter.Tag.Mode), bold.Render(m.filter.Tag.Value)))
+		filters = append(filters, badge.Render(fmt.Sprintf("tag%s%s", filterModeSep(m.filter.Tag.Mode), m.filter.Tag.Value)))
 	}
 	if !m.filter.Text.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("content%s%s", filterModeSep(m.filter.Text.Mode), bold.Render(m.filter.Text.Value)))
+		filters = append(filters, badge.Render(fmt.Sprintf("content%s%s", filterModeSep(m.filter.Text.Mode), m.filter.Text.Value)))
 	}
 
 	// Compose single-line header content
 	headerContent := deviceName
 	if len(filters) > 0 {
-		headerContent = fmt.Sprintf("%s: %s", deviceName, strings.Join(filters, " | "))
+		headerContent = fmt.Sprintf("%s: %s", deviceName, strings.Join(filters, " "))
 	}
 
 	// border (2) + padding (2) = 4 chars horizontal overhead
