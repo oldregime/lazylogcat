@@ -6,29 +6,6 @@
 
 A TUI for viewing Android logcat logs.
 
-<table>
-  <tr>
-    <td>
-      <h3>Main Interface</h3>
-      <img src="assets/logs.png" alt="Logcat logs view" width="400">
-    </td>
-    <td>
-      <h3>Visual Mode</h3>
-      <img src="assets/visual_mode.png" alt="Visual selection mode" width="400">
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <h3>Settings</h3>
-      <img src="assets/settings.png" alt="Settings panel" width="400">
-    </td>
-    <td>
-      <h3>Device Selection</h3>
-      <img src="assets/devices.png" alt="Device selection" width="400">
-    </td>
-  </tr>
-</table>
-
 ## Motivation
 
 Reading Android logcat logs shouldn't require heavy tooling:
