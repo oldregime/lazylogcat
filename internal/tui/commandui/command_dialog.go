@@ -97,9 +97,9 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 	resolveValue := func(cmd model.Command) string {
 		switch cmd {
 		case model.CommandPackage:
-			return cfg.Filter.PackageName
+			return cfg.Filter.PackageName.Value
 		case model.CommandTag:
-			return cfg.Filter.Tag
+			return cfg.Filter.Tag.Value
 		case model.CommandLevel:
 			lvl := string(cfg.Filter.Level)
 			if lvl == "" {
@@ -107,7 +107,7 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 			}
 			return lvl
 		case model.CommandContent:
-			return cfg.Filter.Text
+			return cfg.Filter.Text.Value
 		case model.CommandDevices:
 			if cfg.SelectedDevice != nil {
 				return cfg.SelectedDevice.Name

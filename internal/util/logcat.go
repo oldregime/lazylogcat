@@ -3,6 +3,8 @@ package util
 import (
 	"os/exec"
 	"strings"
+
+	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
 // Process holds a PID and its associated package name from `adb shell ps`.
@@ -43,17 +45,17 @@ func ParseProcessList(output string) []Process {
 	return processes
 }
 
-// ResolvePIDs returns the set of PIDs whose package name contains the filter
-// string (case-insensitive). Returns nil if filter is empty.
-func ResolvePIDs(processes []Process, filter string) map[string]struct{} {
-	if filter == "" {
+// ResolvePIDs returns the set of PIDs whose package name matches the filter
+// according to the filter's mode (contains / exact / regex).
+// Returns nil if the filter is empty.
+func ResolvePIDs(processes []Process, filter *model.TextFilter) map[string]struct{} {
+	if filter.IsEmpty() {
 		return nil
 	}
 
-	filterLower := strings.ToLower(filter)
 	pidSet := make(map[string]struct{})
 	for _, p := range processes {
-		if strings.Contains(strings.ToLower(p.Name), filterLower) {
+		if filter.Match(p.Name) {
 			pidSet[p.PID] = struct{}{}
 		}
 	}

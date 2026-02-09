@@ -1,6 +1,10 @@
 package util
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/parfenovvs/lazylogcat/internal/model"
+)
 
 func TestParseProcessList(t *testing.T) {
 	t.Run("NormalOutput", func(t *testing.T) {
@@ -81,14 +85,14 @@ func TestResolvePIDs(t *testing.T) {
 	}
 
 	t.Run("EmptyFilter", func(t *testing.T) {
-		got := ResolvePIDs(processes, "")
+		got := ResolvePIDs(processes, &model.TextFilter{})
 		if got != nil {
 			t.Errorf("expected nil, got %v", got)
 		}
 	})
 
-	t.Run("SingleMatch", func(t *testing.T) {
-		got := ResolvePIDs(processes, "myapp")
+	t.Run("ContainsSingleMatch", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "myapp", Mode: model.FilterModeContains})
 		if len(got) != 1 {
 			t.Fatalf("expected 1 PID, got %d", len(got))
 		}
@@ -97,8 +101,8 @@ func TestResolvePIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("MultipleMatches", func(t *testing.T) {
-		got := ResolvePIDs(processes, "example")
+	t.Run("ContainsMultipleMatches", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "example", Mode: model.FilterModeContains})
 		if len(got) != 2 {
 			t.Fatalf("expected 2 PIDs, got %d", len(got))
 		}
@@ -110,8 +114,8 @@ func TestResolvePIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("CaseInsensitive", func(t *testing.T) {
-		got := ResolvePIDs(processes, "MYAPP")
+	t.Run("ContainsCaseInsensitive", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "MYAPP", Mode: model.FilterModeContains})
 		if len(got) != 1 {
 			t.Fatalf("expected 1 PID, got %d", len(got))
 		}
@@ -120,24 +124,61 @@ func TestResolvePIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("NoMatch", func(t *testing.T) {
-		got := ResolvePIDs(processes, "nonexistent")
+	t.Run("ContainsNoMatch", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "nonexistent", Mode: model.FilterModeContains})
 		if len(got) != 0 {
 			t.Errorf("expected empty map, got %v", got)
 		}
 	})
 
-	t.Run("MatchAll", func(t *testing.T) {
-		got := ResolvePIDs(processes, "com.")
+	t.Run("ContainsMatchAll", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "com.", Mode: model.FilterModeContains})
 		if len(got) != 3 {
 			t.Fatalf("expected 3 PIDs, got %d", len(got))
 		}
 	})
 
 	t.Run("EmptyProcessList", func(t *testing.T) {
-		got := ResolvePIDs(nil, "test")
+		got := ResolvePIDs(nil, &model.TextFilter{Value: "test", Mode: model.FilterModeContains})
 		if len(got) != 0 {
 			t.Errorf("expected empty map, got %v", got)
+		}
+	})
+
+	t.Run("ExactMatch", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "com.example.myapp", Mode: model.FilterModeExact})
+		if len(got) != 1 {
+			t.Fatalf("expected 1 PID, got %d", len(got))
+		}
+		if _, ok := got["100"]; !ok {
+			t.Errorf("expected PID 100 in set, got %v", got)
+		}
+	})
+
+	t.Run("ExactNoSubstringMatch", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "example", Mode: model.FilterModeExact})
+		if len(got) != 0 {
+			t.Errorf("expected empty map for exact substring, got %v", got)
+		}
+	})
+
+	t.Run("RegexMatch", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "com\\.example\\..*", Mode: model.FilterModeRegex})
+		if len(got) != 2 {
+			t.Fatalf("expected 2 PIDs, got %d", len(got))
+		}
+		if _, ok := got["100"]; !ok {
+			t.Errorf("expected PID 100 in set")
+		}
+		if _, ok := got["200"]; !ok {
+			t.Errorf("expected PID 200 in set")
+		}
+	})
+
+	t.Run("RegexInvalidPattern", func(t *testing.T) {
+		got := ResolvePIDs(processes, &model.TextFilter{Value: "[bad", Mode: model.FilterModeRegex})
+		if len(got) != 0 {
+			t.Errorf("expected empty map for invalid regex, got %v", got)
 		}
 	})
 }

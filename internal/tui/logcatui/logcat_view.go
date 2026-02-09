@@ -119,7 +119,7 @@ func readNext(m LogcatViewModel) tea.Msg {
 
 	line := model.ParseLogLine(raw)
 
-	if !matchesFilter(raw, line, m.filter, m.pidSet) {
+	if !matchesFilter(raw, line, &m.filter, m.pidSet) {
 		return logcatEmptyMsg{}
 	}
 
@@ -147,7 +147,7 @@ func pidRefreshTick() tea.Cmd {
 	})
 }
 
-func refreshPIDs(deviceId string, filter string) tea.Cmd {
+func refreshPIDs(deviceId string, filter *model.TextFilter) tea.Cmd {
 	return func() tea.Msg {
 		processes, err := util.GetProcessList(deviceId)
 		if err != nil {
@@ -222,18 +222,19 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	case commandui.CommandDialogTextInputAppliedMsg:
 		m.showCommandDialog = false
+		msg.Filter.Compile()
 		switch msg.Command {
 		case model.CommandPackage:
-			m.filter.PackageName = msg.Value
-			if msg.Value == "" {
+			m.filter.PackageName = msg.Filter
+			if msg.Filter.IsEmpty() {
 				m.pidSet = nil
 			}
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandTag:
-			m.filter.Tag = msg.Value
+			m.filter.Tag = msg.Filter
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandContent:
-			m.filter.Text = msg.Value
+			m.filter.Text = msg.Filter
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		}
 		return m, nil
@@ -306,16 +307,16 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			tickForBatch(),
 			func() tea.Msg { return tui.MeasureCmd{} },
 		}
-		if m.filter.PackageName != "" {
+		if !m.filter.PackageName.IsEmpty() {
 			// Start PID refresh cycle and do an immediate resolution
-			cmds = append(cmds, pidRefreshTick(), refreshPIDs(m.deviceId, m.filter.PackageName))
+			cmds = append(cmds, pidRefreshTick(), refreshPIDs(m.deviceId, &m.filter.PackageName))
 		}
 		return m, tea.Batch(cmds...)
 
 	case pidRefreshTickMsg:
-		if m.filter.PackageName != "" {
+		if !m.filter.PackageName.IsEmpty() {
 			return m, tea.Batch(
-				refreshPIDs(m.deviceId, m.filter.PackageName),
+				refreshPIDs(m.deviceId, &m.filter.PackageName),
 				pidRefreshTick(),
 			)
 		}
@@ -697,14 +698,14 @@ func (m LogcatViewModel) headerView() string {
 
 	// Build filter parts: package, tag, content (text), log level
 	var filters []string
-	if m.filter.PackageName != "" {
-		filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName))
+	if !m.filter.PackageName.IsEmpty() {
+		filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName.Value))
 	}
-	if m.filter.Tag != "" {
-		filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag))
+	if !m.filter.Tag.IsEmpty() {
+		filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag.Value))
 	}
-	if m.filter.Text != "" {
-		filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text))
+	if !m.filter.Text.IsEmpty() {
+		filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text.Value))
 	}
 	if m.filter.Level != "" && m.filter.Level != model.LvlV {
 		filters = append(filters, fmt.Sprintf("level:%s", string(m.filter.Level)))

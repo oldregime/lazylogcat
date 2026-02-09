@@ -10,7 +10,7 @@ import (
 // CommandDialogTextInputAppliedMsg is sent when the user confirms the text input value with enter.
 type CommandDialogTextInputAppliedMsg struct {
 	Command model.Command
-	Value   string
+	Filter  model.TextFilter
 }
 
 func textInputTitle(cmd model.Command) string {
@@ -39,11 +39,13 @@ func textInputPlaceholder(cmd model.Command) string {
 	}
 }
 
-func newCommandTextInput(cmd model.Command, currentValue string, deviceId string) TextInputModel {
+func newCommandTextInput(cmd model.Command, current model.TextFilter, deviceId string) TextInputModel {
 	return NewTextInput(TextInputConfig{
 		Title:       textInputTitle(cmd),
 		Placeholder: textInputPlaceholder(cmd),
-		Value:       currentValue,
+		Value:       current.Value,
+		Mode:        current.Mode,
+		ModeEnabled: true,
 	})
 }
 
@@ -52,9 +54,12 @@ func (m CommandDialogModel) updateTextInput(msg tea.KeyMsg, key string) (Command
 	m.textInputDlg, cmd = m.textInputDlg.Update(msg)
 	if m.textInputDlg.Submitted() {
 		activeCmd := m.activeCommand
-		value := m.textInputDlg.Value()
+		tf := model.TextFilter{
+			Value: m.textInputDlg.Value(),
+			Mode:  m.textInputDlg.Mode(),
+		}
 		return m, func() tea.Msg {
-			return CommandDialogTextInputAppliedMsg{Command: activeCmd, Value: value}
+			return CommandDialogTextInputAppliedMsg{Command: activeCmd, Filter: tf}
 		}
 	}
 	return m, cmd

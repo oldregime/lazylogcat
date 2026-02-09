@@ -7,9 +7,9 @@ import (
 
 func FilterFromConfig(c *config.Config) model.Filter {
 	return model.Filter{
-		PackageName: c.Filter.Pkg.Value,
-		Tag:         c.Filter.Tag.Value,
-		Text:        c.Filter.Txt.Value,
+		PackageName: model.TextFilter{Value: c.Filter.Pkg.Value},
+		Tag:         model.TextFilter{Value: c.Filter.Tag.Value},
+		Text:        model.TextFilter{Value: c.Filter.Txt.Value},
 		Level:       model.LvlV,
 	}
 }
