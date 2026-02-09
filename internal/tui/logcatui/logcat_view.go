@@ -686,6 +686,17 @@ func (m LogcatViewModel) View() string {
 	return baseView
 }
 
+func filterModeSep(mode model.TextFilterMode) string {
+	switch mode {
+	case model.FilterModeExact:
+		return "=:"
+	case model.FilterModeRegex:
+		return "~:"
+	default:
+		return ":"
+	}
+}
+
 func (m LogcatViewModel) headerView() string {
 	// Build device label
 	var name string
@@ -697,18 +708,19 @@ func (m LogcatViewModel) headerView() string {
 	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
 
 	// Build filter parts: package, tag, content (text), log level
+	bold := lipgloss.NewStyle().Bold(true)
 	var filters []string
 	if !m.filter.PackageName.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName.Value))
-	}
-	if !m.filter.Tag.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag.Value))
-	}
-	if !m.filter.Text.IsEmpty() {
-		filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text.Value))
+		filters = append(filters, fmt.Sprintf("pkg%s%s", filterModeSep(m.filter.PackageName.Mode), bold.Render(m.filter.PackageName.Value)))
 	}
 	if m.filter.Level != "" && m.filter.Level != model.LvlV {
-		filters = append(filters, fmt.Sprintf("level:%s", string(m.filter.Level)))
+		filters = append(filters, fmt.Sprintf("lvl:%s", bold.Render(string(m.filter.Level))))
+	}
+	if !m.filter.Tag.IsEmpty() {
+		filters = append(filters, fmt.Sprintf("tag%s%s", filterModeSep(m.filter.Tag.Mode), bold.Render(m.filter.Tag.Value)))
+	}
+	if !m.filter.Text.IsEmpty() {
+		filters = append(filters, fmt.Sprintf("content%s%s", filterModeSep(m.filter.Text.Mode), bold.Render(m.filter.Text.Value)))
 	}
 
 	// Compose single-line header content
