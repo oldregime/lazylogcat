@@ -41,14 +41,18 @@ type Filter struct {
 	Txt TextFilter `json:"log_text,omitempty"`
 }
 
-// TextFilter represents a filter field that currently holds a value,
-// and is structured to support future extensions (e.g. regex mode).
+// TextFilter represents a filter field with an optional matching mode.
 // It accepts both a plain string and an object form in JSON:
 //
 //	"log_tag": "MyTag"
 //	"log_tag": { "value": "MyTag" }
+//	"log_tag": { "value": "MyTag", "mode": "exact" }
+//
+// Valid mode values: "contains" (default), "exact", "regex".
+// When mode is omitted or empty, "contains" is assumed.
 type TextFilter struct {
 	Value string `json:"value"`
+	Mode  string `json:"mode,omitempty"`
 }
 
 // IsZero returns true if the TextFilter has no meaningful value set.
@@ -69,9 +73,14 @@ func (f *TextFilter) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*alias)(f))
 }
 
-// MarshalJSON outputs the short string form when only Value is set.
+// MarshalJSON outputs the short string form when Mode is default (empty or
+// "contains"), and the full object form when a non-default mode is set.
 func (f TextFilter) MarshalJSON() ([]byte, error) {
-	return json.Marshal(f.Value)
+	if f.Mode == "" || f.Mode == "contains" {
+		return json.Marshal(f.Value)
+	}
+	type alias TextFilter
+	return json.Marshal(alias(f))
 }
 
 // DefaultConfig returns the default configuration with sensible defaults.

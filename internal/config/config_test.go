@@ -182,6 +182,10 @@ func TestTextFilter_UnmarshalJSON(t *testing.T) {
 		{name: "Object", json: `{"value":"hello"}`, want: TextFilter{Value: "hello"}},
 		{name: "EmptyObject", json: `{}`, want: TextFilter{}},
 		{name: "ObjectEmptyValue", json: `{"value":""}`, want: TextFilter{Value: ""}},
+		{name: "ObjectWithModeExact", json: `{"value":"hello","mode":"exact"}`, want: TextFilter{Value: "hello", Mode: "exact"}},
+		{name: "ObjectWithModeRegex", json: `{"value":"err.*","mode":"regex"}`, want: TextFilter{Value: "err.*", Mode: "regex"}},
+		{name: "ObjectWithModeContains", json: `{"value":"hello","mode":"contains"}`, want: TextFilter{Value: "hello", Mode: "contains"}},
+		{name: "ObjectWithModeOmitted", json: `{"value":"hello"}`, want: TextFilter{Value: "hello"}},
 		{name: "ObjectExtraFields", json: `{"value":"hello","unknown":"ignored"}`, want: TextFilter{Value: "hello"}},
 		{name: "InvalidJSON", json: `{bad`, wantErr: true},
 		{name: "Number", json: `123`, wantErr: true},
@@ -216,6 +220,10 @@ func TestTextFilter_MarshalJSON(t *testing.T) {
 	}{
 		{name: "WithValue", f: TextFilter{Value: "hello"}, want: `"hello"`},
 		{name: "Empty", f: TextFilter{}, want: `""`},
+		{name: "ModeContains", f: TextFilter{Value: "hello", Mode: "contains"}, want: `"hello"`},
+		{name: "ModeEmpty", f: TextFilter{Value: "hello", Mode: ""}, want: `"hello"`},
+		{name: "ModeExact", f: TextFilter{Value: "hello", Mode: "exact"}, want: `{"value":"hello","mode":"exact"}`},
+		{name: "ModeRegex", f: TextFilter{Value: "err.*", Mode: "regex"}, want: `{"value":"err.*","mode":"regex"}`},
 	}
 
 	for _, tt := range tests {
@@ -298,6 +306,23 @@ func TestLoadFile(t *testing.T) {
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example.app"},
 					Tag: TextFilter{Value: "MyTag"},
+					Txt: TextFilter{Value: "error"},
+				},
+			},
+		},
+		{
+			name: "FilterWithModes",
+			jsonData: `{
+  "filter": {
+    "package_name": {"value": "com.example.app", "mode": "exact"},
+    "log_tag": {"value": "My.*Tag", "mode": "regex"},
+    "log_text": "error"
+  }
+}`,
+			wantConfig: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.example.app", Mode: "exact"},
+					Tag: TextFilter{Value: "My.*Tag", Mode: "regex"},
 					Txt: TextFilter{Value: "error"},
 				},
 			},
@@ -583,6 +608,44 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
+			name: "OverlayWithMode",
+			base: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.base"},
+				},
+			},
+			overlay: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.overlay", Mode: "exact"},
+				},
+			},
+			want: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.overlay", Mode: "exact"},
+				},
+			},
+		},
+		{
+			name: "ModePreservedFromBase",
+			base: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.base", Mode: "regex"},
+					Tag: TextFilter{Value: "BaseTag", Mode: "exact"},
+				},
+			},
+			overlay: Config{
+				Filter: Filter{
+					Tag: TextFilter{Value: "OverlayTag"},
+				},
+			},
+			want: Config{
+				Filter: Filter{
+					Pkg: TextFilter{Value: "com.base", Mode: "regex"},
+					Tag: TextFilter{Value: "OverlayTag"},
+				},
+			},
+		},
+		{
 			name: "WrapOverridesBase",
 			base: Config{
 				Display: Display{Wrap: boolPtr(true)},
@@ -775,6 +838,37 @@ func TestResolve(t *testing.T) {
 		want.Filter.Pkg = TextFilter{Value: "com.project"}  // From project
 		want.Filter.Tag = TextFilter{Value: "LocalTag"}     // Overridden by local
 		want.Filter.Txt = TextFilter{Value: "project_text"} // From project
+		compareConfigs(t, got, want)
+	})
+
+	t.Run("FilterModesPersisted", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("Failed to chdir: %v", err)
+		}
+		defer os.Chdir(origDir)
+
+		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.json", `{
+			"filter": {
+				"package_name": {"value": "com.project", "mode": "exact"},
+				"log_tag": {"value": "Tag.*", "mode": "regex"}
+			}
+		}`)
+
+		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.local.json", `{
+			"filter": {
+				"log_tag": {"value": "LocalTag", "mode": "exact"}
+			}
+		}`)
+
+		got, err := Resolve()
+		if err != nil {
+			t.Errorf("Resolve() error = %v, want nil", err)
+		}
+
+		want := DefaultConfig()
+		want.Filter.Pkg = TextFilter{Value: "com.project", Mode: "exact"}
+		want.Filter.Tag = TextFilter{Value: "LocalTag", Mode: "exact"} // Overridden by local
 		compareConfigs(t, got, want)
 	})
 

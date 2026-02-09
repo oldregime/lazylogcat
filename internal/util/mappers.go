@@ -6,11 +6,38 @@ import (
 )
 
 func FilterFromConfig(c *config.Config) model.Filter {
+	pkg := textFilterFromConfig(c.Filter.Pkg)
+	tag := textFilterFromConfig(c.Filter.Tag)
+	txt := textFilterFromConfig(c.Filter.Txt)
 	return model.Filter{
-		PackageName: model.TextFilter{Value: c.Filter.Pkg.Value},
-		Tag:         model.TextFilter{Value: c.Filter.Tag.Value},
-		Text:        model.TextFilter{Value: c.Filter.Txt.Value},
+		PackageName: pkg,
+		Tag:         tag,
+		Text:        txt,
 		Level:       model.LvlV,
+	}
+}
+
+// textFilterFromConfig converts a config.TextFilter to a model.TextFilter,
+// mapping the mode string and pre-compiling regex patterns.
+func textFilterFromConfig(cf config.TextFilter) model.TextFilter {
+	tf := model.TextFilter{
+		Value: cf.Value,
+		Mode:  modeFromConfig(cf.Mode),
+	}
+	tf.Compile()
+	return tf
+}
+
+// modeFromConfig maps a config mode string to a model.TextFilterMode.
+// Unknown values default to FilterModeContains.
+func modeFromConfig(s string) model.TextFilterMode {
+	switch s {
+	case "exact":
+		return model.FilterModeExact
+	case "regex":
+		return model.FilterModeRegex
+	default:
+		return model.FilterModeContains
 	}
 }
 

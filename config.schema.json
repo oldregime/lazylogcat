@@ -91,7 +91,7 @@
   },
   "$defs": {
     "text_filter": {
-      "description": "A filter value. Accepts a plain string (shorthand) or an object with a \"value\" field (extensible form).",
+      "description": "A filter value. Accepts a plain string (shorthand for contains mode) or an object with \"value\" and optional \"mode\" fields.",
       "oneOf": [
         {
           "type": "string"
@@ -103,6 +103,12 @@
             "value": {
               "type": "string",
               "description": "The filter value."
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["contains", "exact", "regex"],
+              "description": "Matching mode. \"contains\" matches case-insensitive substrings, \"exact\" matches case-insensitive full strings, \"regex\" matches case-insensitive regular expressions.",
+              "default": "contains"
             }
           },
           "required": ["value"]
