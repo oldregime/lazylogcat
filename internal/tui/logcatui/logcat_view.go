@@ -29,8 +29,8 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "Commands: Ctrl+p • Jump to recent: Shift+G • Clear: Shift+C • Visual: v"
-	helpTextVisual = "Multiline: Shift+V • Copy: y • Exit visual: ESC"
+	helpTextNormal = "Commands: ctrl+p • Jump to recent: shift+g • Clear: shift+c • Visual: v"
+	helpTextVisual = "Multiline: shift+v • Copy: y • Open in editor: ctrl+e • Exit visual: ESC"
 )
 
 // shortcutMap maps the second key of a ctrl+x shortcut to its CommandData.
@@ -262,6 +262,16 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	case tui.ToastExpiredMsg:
 		m.toast.Update(msg)
+
+	case tui.EditorFinishedMsg:
+		if msg.Err != nil {
+			slog.Warn("Editor exited with error", "error", msg.Err)
+			toastCmd := m.toast.Show("Editor error: " + msg.Err.Error())
+			m.Render()
+			return m, toastCmd
+		}
+		m.Render()
+		return m, nil
 
 	case tea.KeyMsg:
 		result := m.handleKeyMsg(msg)
@@ -708,6 +718,22 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		}
 		return updateResult{}
 
+	case "ctrl+e":
+		lines := m.selectedLines()
+		if len(lines) == 0 {
+			return updateResult{}
+		}
+		cmd, err := util.OpenInEditor(lines...)
+		if err != nil {
+			slog.Warn("Failed to open editor", "error", err)
+			toastCmd := m.toast.Show(err.Error())
+			return updateResult{cmd: toastCmd}
+		}
+		execCmd := tea.ExecProcess(cmd, func(err error) tea.Msg {
+			return tui.EditorFinishedMsg{Err: err}
+		})
+		return updateResult{cmd: execCmd}
+
 	case "j", "down":
 		if m.currentLine < m.log.Size()-1 {
 			m.currentLine++
@@ -724,6 +750,30 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 	}
 
 	return updateResult{}
+}
+
+// selectedLines returns the text of the currently selected log lines in visual mode.
+// If a multi-line selection is active (startSelected >= 0), it returns all lines in the range.
+// Otherwise, it returns the single line at currentLine.
+func (m *LogcatViewModel) selectedLines() []string {
+	if m.currentLine < 0 || m.currentLine >= m.log.Size() {
+		return nil
+	}
+
+	cols := m.outputPrefs.Columns
+	if m.startSelected >= 0 {
+		start := min(m.currentLine, m.startSelected)
+		end := max(m.currentLine, m.startSelected)
+		logs := m.log.Recent(m.log.Size() - start)
+		lines := make([]string, 0, end-start+1)
+		for i := 0; i <= end-start; i++ {
+			lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(cols)))
+		}
+		return lines
+	}
+
+	logs := m.log.Recent(m.log.Size() - m.currentLine)
+	return []string{strings.TrimSpace(logs[0].ModifiedString(cols))}
 }
 
 func (m *LogcatViewModel) ensureLineVisible() {

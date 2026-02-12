@@ -17,3 +17,7 @@ type ShowDeviceDialogCmd struct{}
 type ReconnectLogcatCmd struct{}
 
 type ExitCmd struct{}
+
+type EditorFinishedMsg struct {
+	Err error
+}
