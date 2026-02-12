@@ -438,15 +438,16 @@ func (m *LogcatViewModel) Render() {
 			b.WriteString(styled)
 			b.WriteString("\n")
 		} else {
-			b.WriteString(line)
+			if m.outputPrefs.SoftWrap {
+				styled := lipgloss.NewStyle().Width(m.viewport.Width).Render(line)
+				b.WriteString(styled)
+			} else {
+				b.WriteString(line)
+			}
 			b.WriteString("\n")
 		}
 	}
-	wrapped := b.String()
-	if m.outputPrefs.SoftWrap {
-		wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
-	}
-	m.viewport.SetContent(wrapped)
+	m.viewport.SetContent(b.String())
 }
 
 // handleKeyMsg routes key messages to appropriate handlers based on mode
