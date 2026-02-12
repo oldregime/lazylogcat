@@ -403,11 +403,54 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// softWrapIndent wraps line so that the first terminal line occupies up to
+// viewportWidth characters and every continuation line is indented by
+// prefixWidth spaces (aligning with the start of the message column).
+// When prefixWidth is 0 or leaves no room for the message, it falls back to
+// a plain width-constrained render via lipgloss.
+func softWrapIndent(line string, prefixWidth, viewportWidth int) string {
+	msgWidth := viewportWidth - prefixWidth
+	if prefixWidth <= 0 || msgWidth < 4 {
+		// Fallback: no useful indent possible
+		return lipgloss.NewStyle().Width(viewportWidth).Render(line)
+	}
+
+	// Split the assembled line into prefix and message portions.
+	// PrefixWidth includes the trailing space, so line[:prefixWidth] is the
+	// prefix with its separator and line[prefixWidth:] is the message text.
+	var prefix, message string
+	if prefixWidth < len(line) {
+		prefix = line[:prefixWidth]
+		message = line[prefixWidth:]
+	} else {
+		// Line is shorter than or equal to the prefix (no message content)
+		return lipgloss.NewStyle().Width(viewportWidth).Render(line)
+	}
+
+	// Wrap the message part at the reduced width
+	wrapped := ansi.Wrap(message, msgWidth, " ")
+	msgLines := strings.Split(wrapped, "\n")
+
+	indent := strings.Repeat(" ", prefixWidth)
+	var sb strings.Builder
+	for j, ml := range msgLines {
+		if j == 0 {
+			sb.WriteString(prefix)
+		} else {
+			sb.WriteString("\n")
+			sb.WriteString(indent)
+		}
+		sb.WriteString(ml)
+	}
+	return sb.String()
+}
+
 func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
+	cols := m.outputPrefs.Columns
 	for i, logLine := range logs {
-		line := logLine.ModifiedString(m.outputPrefs.Columns)
+		line := logLine.ModifiedString(cols)
 		if m.visualMode {
 			selected := false
 			if m.startSelected >= 0 {
@@ -418,11 +461,17 @@ func (m *LogcatViewModel) Render() {
 				selected = true
 			}
 			if selected {
+				var content string
+				if m.outputPrefs.SoftWrap {
+					content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width)
+				} else {
+					content = line
+				}
 				styled := lipgloss.NewStyle().
 					Background(theme.ColorVisualBG).
 					Foreground(theme.ColorVisualFG).
 					Width(m.viewport.Width).
-					Render(line)
+					Render(content)
 				b.WriteString(styled)
 				b.WriteString("\n")
 				continue
@@ -432,14 +481,17 @@ func (m *LogcatViewModel) Render() {
 			style := lipgloss.NewStyle().
 				Foreground(theme.GetLogColor(logLine.Level))
 			if m.outputPrefs.SoftWrap {
-				style = style.Width(m.viewport.Width)
+				content := softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width)
+				styled := style.Render(content)
+				b.WriteString(styled)
+			} else {
+				styled := style.Render(line)
+				b.WriteString(styled)
 			}
-			styled := style.Render(line)
-			b.WriteString(styled)
 			b.WriteString("\n")
 		} else {
 			if m.outputPrefs.SoftWrap {
-				styled := lipgloss.NewStyle().Width(m.viewport.Width).Render(line)
+				styled := softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width)
 				b.WriteString(styled)
 			} else {
 				b.WriteString(line)
@@ -640,11 +692,13 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	max := max(m.currentLine, m.startSelected)
 
 	logs := m.log.All()
+	cols := m.outputPrefs.Columns
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
-		line := logs[i].ModifiedString(m.outputPrefs.Columns)
+		line := logs[i].ModifiedString(cols)
 		if m.outputPrefs.SoftWrap || (m.startSelected != -1 && i >= min && i <= max) {
-			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
+			wrapped := softWrapIndent(line, logs[i].PrefixWidth(cols), m.viewport.Width)
+			linesUpToCurrent += lipgloss.Height(wrapped)
 		} else {
 			linesUpToCurrent++
 		}

@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestParseLogLine(t *testing.T) {
 	tests := []struct {
@@ -263,6 +267,118 @@ func TestLogLineString(t *testing.T) {
 			got := ParseLogLine(tt.raw).String()
 			if got != tt.raw {
 				t.Errorf("String() = %q, want %q", got, tt.raw)
+			}
+		})
+	}
+}
+
+func TestPrefixWidth(t *testing.T) {
+	allCols := Columns{Date: true, Time: true, PID: true, TID: true, Level: true, Tag: true, Message: true}
+
+	parsed := ParseLogLine("02-08 12:12:09.629  3950  4005 D BusinessScope: Enqueuing the block")
+	// Prefix with all columns: "02-08 12:12:09.629  3950  4005 D BusinessScope: "
+	// Date(5) + sp + Time(12) + sp + PID(5) + sp + TID(5) + sp + Level(1) + sp + Tag:(14) = 5+1+12+1+5+1+5+1+1+1+14 = 47, +1 trailing space = 48
+	expectedAllPrefix := fmt.Sprintf("%s %s %5s %5s %s %s:",
+		parsed.Date, parsed.Time, parsed.PID, parsed.TID, parsed.Level, parsed.Tag)
+	expectedAllWidth := len(expectedAllPrefix) + 1 // +1 for trailing space before message
+
+	tests := []struct {
+		name string
+		line LogLine
+		cols Columns
+		want int
+	}{
+		{
+			name: "AllColumns",
+			line: parsed,
+			cols: allCols,
+			want: expectedAllWidth,
+		},
+		{
+			name: "NoPrefixColumns",
+			line: parsed,
+			cols: Columns{Message: true},
+			want: 0,
+		},
+		{
+			name: "OnlyTagAndMessage",
+			line: parsed,
+			cols: Columns{Tag: true, Message: true},
+			want: len(parsed.Tag+":") + 1,
+		},
+		{
+			name: "OnlyDateAndTime",
+			line: parsed,
+			cols: Columns{Date: true, Time: true},
+			want: len(parsed.Date + " " + parsed.Time),
+		},
+		{
+			name: "MessageDisabled",
+			line: parsed,
+			cols: Columns{Date: true, Time: true, Level: true, Tag: true},
+			want: len(strings.Join([]string{parsed.Date, parsed.Time, parsed.Level, parsed.Tag + ":"}, " ")),
+		},
+		{
+			name: "UnparsedLine",
+			line: ParseLogLine("--------- beginning of main"),
+			cols: allCols,
+			want: 0,
+		},
+		{
+			name: "EmptyLine",
+			line: ParseLogLine(""),
+			cols: allCols,
+			want: 0,
+		},
+		{
+			name: "ShortTag",
+			line: ParseLogLine("02-08 12:12:09.629  3950  4005 D X: msg"),
+			cols: allCols,
+			want: len("02-08 12:12:09.629  3950  4005 D X:") + 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.line.PrefixWidth(tt.cols)
+			if got != tt.want {
+				t.Errorf("PrefixWidth() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrefixWidth_MatchesModifiedString(t *testing.T) {
+	// Verify that PrefixWidth equals the position of the message start
+	// in the ModifiedString output for various column configurations.
+	line := ParseLogLine("02-08 12:12:09.629  3950  4005 D BusinessScope: Enqueuing the block")
+
+	colSets := []struct {
+		name string
+		cols Columns
+	}{
+		{"AllColumns", Columns{Date: true, Time: true, PID: true, TID: true, Level: true, Tag: true, Message: true}},
+		{"TagAndMessage", Columns{Tag: true, Message: true}},
+		{"TimeAndMessage", Columns{Time: true, Message: true}},
+		{"PIDTIDMessage", Columns{PID: true, TID: true, Message: true}},
+		{"LevelTagMessage", Columns{Level: true, Tag: true, Message: true}},
+	}
+
+	for _, tc := range colSets {
+		t.Run(tc.name, func(t *testing.T) {
+			pw := line.PrefixWidth(tc.cols)
+			full := line.ModifiedString(tc.cols)
+			if pw == 0 {
+				return // No prefix columns, nothing to check
+			}
+			// The message should start at position pw in the full string
+			if pw > len(full) {
+				t.Fatalf("PrefixWidth(%d) > len(ModifiedString)(%d)", pw, len(full))
+			}
+			msgPart := full[pw:]
+			if msgPart != line.Message {
+				t.Errorf("full[PrefixWidth:] = %q, want %q (full=%q, pw=%d)",
+					msgPart, line.Message, full, pw)
 			}
 		})
 	}

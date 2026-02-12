@@ -138,6 +138,45 @@ func (l LogLine) ModifiedString(cols Columns) string {
 	return strings.Join(parts, " ")
 }
 
+// PrefixWidth returns the visual width of all enabled columns before Message,
+// including the separating spaces. If Message is enabled the trailing space
+// between the last prefix column and the message is included.
+// Returns 0 when the line was not parsed or no prefix columns are enabled.
+func (l LogLine) PrefixWidth(cols Columns) int {
+	if !l.Parsed() {
+		return 0
+	}
+	var parts []string
+	if cols.Date {
+		parts = append(parts, l.Date)
+	}
+	if cols.Time {
+		parts = append(parts, l.Time)
+	}
+	if cols.PID {
+		parts = append(parts, fmt.Sprintf("%5s", l.PID))
+	}
+	if cols.TID {
+		parts = append(parts, fmt.Sprintf("%5s", l.TID))
+	}
+	if cols.Level {
+		parts = append(parts, l.Level)
+	}
+	if cols.Tag {
+		parts = append(parts, l.Tag+":")
+	}
+	if len(parts) == 0 {
+		return 0
+	}
+	// Width of joined prefix columns (content + spaces between them)
+	w := len(strings.Join(parts, " "))
+	// Add the trailing space that separates prefix from message
+	if cols.Message {
+		w++
+	}
+	return w
+}
+
 // Parsed returns true if the line was successfully parsed into structured fields.
 func (l LogLine) Parsed() bool {
 	return l.Level != ""
