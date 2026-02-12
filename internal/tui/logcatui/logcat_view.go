@@ -21,7 +21,7 @@ import (
 )
 
 const maxLogLines = 10000
-const batchTimeout = 50 * time.Millisecond
+const batchTimeout = 33 * time.Millisecond
 
 var (
 	titleStyle = func() lipgloss.Style {
