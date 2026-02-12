@@ -90,15 +90,11 @@ func (m CommandDialogModel) viewDevices() string {
 	if m.deviceErr != nil {
 		errorMsg := theme.DialogHelp().
 			Render(fmt.Sprintf("Error: %s", m.deviceErr.Error()))
-		hint := theme.DialogHelp().
-			Render("Retry: r")
-		body = "\n" + errorMsg + "\n\n" + hint
+		body = "\n" + errorMsg + "\n"
 	} else if len(m.allDevices) == 0 {
 		emptyMsg := theme.DialogHelp().
 			Render("No devices connected.")
-		hint := theme.DialogHelp().
-			Render("Refresh: r")
-		body = "\n" + emptyMsg + "\n\n" + hint
+		body = "\n" + emptyMsg + "\n"
 	} else {
 		// Delegate to singleSelect.View() when we have devices
 		return m.singleSelect.View()
