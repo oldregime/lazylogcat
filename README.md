@@ -17,12 +17,19 @@ lazylogcat provides a lightweight, focused TUI for viewing and filtering logcat 
 
 ## Prerequisites
 
-- Go 1.24 or higher
 - `adb` (Android Debug Bridge) installed and in PATH (see [ADB Installation Guide](https://developer.android.com/tools/adb))
 
 ## Installation
 
-### Option 1: Install via go install (Recommended)
+### Option 1: Homebrew (Recommended)
+
+```bash
+brew tap parfenovvs/lazylogcat && brew install lazylogcat
+```
+
+### Option 2: Install via go install
+
+Requires Go 1.24 or higher.
 
 ```bash
 go install github.com/parfenovvs/lazylogcat@latest
@@ -40,7 +47,9 @@ which lazylogcat
 
 If `lazylogcat` is not found, add the Go bin directory to your `PATH` environment variable.
 
-### Option 2: Build from Source
+### Option 3: Build from Source
+
+Requires Go 1.24 or higher.
 
 ```bash
 # Clone the repository
