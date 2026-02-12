@@ -36,9 +36,15 @@ var (
 	// and other prominent interactive elements.
 	ColorPrimary = lipgloss.Color(brightCyan)
 
+	// ColorRegular is the default foreground color for normal text and log messages.
+	ColorRegular = lipgloss.Color("")
+
 	// ColorMuted is for de-emphasized text such as help hints, inactive
 	// labels, and secondary information.
 	ColorMuted = lipgloss.Color(brightBlack)
+
+	// ColorWarning is for warning messages and cautionary notifications.
+	ColorWarning = lipgloss.Color(yellow)
 
 	// ColorDanger is for error messages and validation warnings.
 	ColorDanger = lipgloss.Color(brightRed)
@@ -65,7 +71,7 @@ var (
 func GetLogColor(level string) lipgloss.Color {
 	switch level {
 	case "V":
-		return ""
+		return ColorRegular
 	case "D":
 		return lipgloss.Color(blue)
 	case "I":

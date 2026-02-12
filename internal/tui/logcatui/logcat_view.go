@@ -266,7 +266,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case tui.EditorFinishedMsg:
 		if msg.Err != nil {
 			slog.Warn("Editor exited with error", "error", msg.Err)
-			toastCmd := m.toast.Show("Editor error: " + msg.Err.Error())
+			toastCmd := m.toast.Show("Editor error: "+msg.Err.Error(), tui.ToastError)
 			m.Render()
 			return m, toastCmd
 		}
@@ -338,7 +338,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, nil
 		}
 		util.CloseLogcat()
-		toastCmd := m.toast.Show("Reconnecting...")
+		toastCmd := m.toast.Show("Reconnecting...", tui.ToastInfo)
 		return m, tea.Batch(toastCmd, reconnectTick())
 
 	case reconnectTickMsg:
@@ -643,7 +643,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	cmdData, ok := shortcutMap[key]
 	if !ok {
-		cmd := m.toast.Show("Unknown shortcut: ctrl+x " + key)
+		cmd := m.toast.Show("Unknown shortcut: ctrl+x "+key, tui.ToastWarning)
 		return updateResult{cmd: cmd}
 	}
 
@@ -726,7 +726,7 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		cmd, err := util.OpenInEditor(lines...)
 		if err != nil {
 			slog.Warn("Failed to open editor", "error", err)
-			toastCmd := m.toast.Show(err.Error())
+			toastCmd := m.toast.Show(err.Error(), tui.ToastError)
 			return updateResult{cmd: toastCmd}
 		}
 		execCmd := tea.ExecProcess(cmd, func(err error) tea.Msg {

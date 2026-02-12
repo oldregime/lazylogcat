@@ -11,6 +11,18 @@ import (
 
 const toastDuration = 2 * time.Second
 
+// ToastLevel controls the visual style of a toast notification.
+type ToastLevel int
+
+const (
+	// ToastInfo is for neutral, informational messages (muted color).
+	ToastInfo ToastLevel = iota
+	// ToastWarning is for cautionary messages (warning color).
+	ToastWarning
+	// ToastError is for error messages (danger color).
+	ToastError
+)
+
 // ToastExpiredMsg is sent when a toast's display timer expires.
 // The ID field ensures stale timers don't dismiss newer toasts.
 type ToastExpiredMsg struct {
@@ -22,15 +34,17 @@ type ToastExpiredMsg struct {
 type ToastModel struct {
 	message string
 	visible bool
+	level   ToastLevel
 	id      int
 }
 
-// Show displays a toast message and returns a tea.Cmd that will dismiss it
-// after the standard duration. Each call increments the internal ID so that
-// only the most recent timer can dismiss the toast.
-func (t *ToastModel) Show(message string) tea.Cmd {
+// Show displays a toast message at the given level and returns a tea.Cmd that
+// will dismiss it after the standard duration. Each call increments the
+// internal ID so that only the most recent timer can dismiss the toast.
+func (t *ToastModel) Show(message string, level ToastLevel) tea.Cmd {
 	t.id++
 	t.message = message
+	t.level = level
 	t.visible = true
 	id := t.id
 	return tea.Tick(toastDuration, func(_ time.Time) tea.Msg {
@@ -53,8 +67,17 @@ func (t ToastModel) View() string {
 	if !t.visible {
 		return ""
 	}
+	var color lipgloss.Color
+	switch t.level {
+	case ToastWarning:
+		color = theme.ColorWarning
+	case ToastError:
+		color = theme.ColorDanger
+	default:
+		color = theme.ColorRegular
+	}
 	style := lipgloss.NewStyle().
-		Foreground(theme.ColorMuted)
+		Foreground(color)
 	return style.Render(t.message)
 }
 
