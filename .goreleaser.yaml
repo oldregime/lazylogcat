@@ -38,3 +38,16 @@ changelog:
       - "^style:"
       - "^ci:"
       - "^test:"
+
+brews:
+  - repository:
+      owner: parfenovvs
+      name: homebrew-lazylogcat
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/parfenovvs/lazylogcat"
+    description: "Interactive Android logcat viewer"
+    license: "MIT"
+    install: |
+      bin.install "lazylogcat"
+    test: |
+      system "#{bin}/lazylogcat", "version"
