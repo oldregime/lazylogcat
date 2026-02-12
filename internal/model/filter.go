@@ -69,6 +69,48 @@ func (tf *TextFilter) Compile() {
 	tf.compiled, tf.compileErr = regexp.Compile("(?i)" + tf.Value)
 }
 
+// FindAllMatchIndexes returns all non-overlapping [start, end) byte-index
+// pairs of matches within haystack. Returns nil when the filter is empty,
+// in exact mode, or has no matches. The indices refer to the original
+// (not lowered) haystack bytes.
+func (tf *TextFilter) FindAllMatchIndexes(haystack string) [][]int {
+	if tf.Value == "" || tf.Mode == FilterModeExact {
+		return nil
+	}
+
+	switch tf.Mode {
+	case FilterModeRegex:
+		re := tf.compiled
+		if re == nil {
+			var err error
+			re, err = regexp.Compile("(?i)" + tf.Value)
+			if err != nil {
+				return nil
+			}
+		} else if tf.compileErr != nil {
+			return nil
+		}
+		return re.FindAllStringIndex(haystack, -1)
+
+	default: // FilterModeContains
+		needle := strings.ToLower(tf.Value)
+		lower := strings.ToLower(haystack)
+		nLen := len(needle)
+		var matches [][]int
+		start := 0
+		for {
+			idx := strings.Index(lower[start:], needle)
+			if idx < 0 {
+				break
+			}
+			absStart := start + idx
+			matches = append(matches, []int{absStart, absStart + nLen})
+			start = absStart + nLen
+		}
+		return matches
+	}
+}
+
 // Match reports whether haystack matches this filter's value according
 // to the current Mode.
 //

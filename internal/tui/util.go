@@ -22,7 +22,7 @@ func DimView(view string) string {
 	dimmedLines := make([]string, len(lines))
 
 	for i, line := range lines {
-		dimmedLines[i] = dimStyle.Render(line)
+		dimmedLines[i] = dimStyle.Render(ansi.Strip(line))
 	}
 
 	return strings.Join(dimmedLines, "\n")
