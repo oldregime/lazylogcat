@@ -64,7 +64,6 @@ type LogcatViewModel struct {
 	visualMode        bool
 	currentLine       int
 	startSelected     int
-	err               error
 	awaitingShortcut  bool
 	connGen           uint64 // incremented on each voluntary reconnect; used to discard stale messages
 	toast             tui.ToastModel
@@ -387,9 +386,10 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		cmds = append(cmds, tickForBatch())
 
 	case logcatErrorMsg:
-		m.err = msg.Err
+		slog.Warn("Logcat connect error", "error", msg.Err)
 		m.reader.Disconnect()
-		return m, nil
+		toastCmd := m.toast.Show(msg.Err.Error(), tui.ToastError)
+		return m, tea.Batch(toastCmd, reconnectTick(m.connGen))
 	}
 
 	if needsRender {
@@ -819,11 +819,6 @@ func (m LogcatViewModel) renderBaseView() string {
 }
 
 func (m LogcatViewModel) View() string {
-	if m.err != nil {
-		slog.Error("Logcat view error", "error", m.err)
-		return fmt.Sprintf("Error: %v\n", m.err)
-	}
-
 	baseView := m.renderBaseView()
 
 	if m.awaitingShortcut {
