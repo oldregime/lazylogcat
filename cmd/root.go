@@ -10,6 +10,12 @@ import (
 
 var debugFlag bool
 
+var (
+	pkgFlag  string
+	tagFlag  string
+	textFlag string
+)
+
 var rootCmd = &cobra.Command{
 	Use:          "lazylogcat",
 	Short:        "Interactive Android logcat viewer",
@@ -27,6 +33,17 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			slog.Warn("Config resolution had errors", "error", err)
 		}
+
+		if cmd.Flags().Changed("pkg") {
+			c.Filter.Pkg = config.TextFilter{Value: pkgFlag}
+		}
+		if cmd.Flags().Changed("tag") {
+			c.Filter.Tag = config.TextFilter{Value: tagFlag}
+		}
+		if cmd.Flags().Changed("text") {
+			c.Filter.Txt = config.TextFilter{Value: textFlag}
+		}
+
 		slog.Debug("Configuration loaded", "config", c.String())
 		return app.LaunchTUI(c)
 	},
@@ -37,6 +54,9 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debugFlag, "debug", false, "Enable debug logging to .lazylogcat.log file")
+	rootCmd.Flags().StringVar(&pkgFlag, "pkg", "", "Filter by package name (contains match, overrides config)")
+	rootCmd.Flags().StringVar(&tagFlag, "tag", "", "Filter by log tag (contains match, overrides config)")
+	rootCmd.Flags().StringVar(&textFlag, "text", "", "Filter by log text (contains match, overrides config)")
 }
 
 func Execute() error {
