@@ -132,6 +132,107 @@ func TestTextFilter_Match(t *testing.T) {
 	}
 }
 
+func TestLevel_Next(t *testing.T) {
+	tests := []struct {
+		name  string
+		level Level
+		want  Level
+	}{
+		{name: "VtoD", level: LvlV, want: LvlD},
+		{name: "DtoI", level: LvlD, want: LvlI},
+		{name: "ItoW", level: LvlI, want: LvlW},
+		{name: "WtoE", level: LvlW, want: LvlE},
+		{name: "EtoF", level: LvlE, want: LvlF},
+		{name: "FtoV_Wrap", level: LvlF, want: LvlV},
+		{name: "UnknownToV", level: Level("X"), want: LvlV},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.level.Next()
+			if got != tt.want {
+				t.Errorf("Level(%q).Next() = %q, want %q", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilter_IsEmpty(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter Filter
+		want   bool
+	}{
+		{name: "AllEmpty", filter: Filter{}, want: true},
+		{name: "LevelV_IsEmpty", filter: Filter{Level: LvlV}, want: true},
+		{name: "LevelD_NotEmpty", filter: Filter{Level: LvlD}, want: false},
+		{name: "PackageSet", filter: Filter{PackageName: TextFilter{Value: "com.example"}}, want: false},
+		{name: "TagSet", filter: Filter{Tag: TextFilter{Value: "MyTag"}}, want: false},
+		{name: "TextSet", filter: Filter{Text: TextFilter{Value: "error"}}, want: false},
+		{name: "MultipleFieldsSet", filter: Filter{
+			PackageName: TextFilter{Value: "pkg"},
+			Level:       LvlE,
+			Tag:         TextFilter{Value: "tag"},
+		}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.filter.IsEmpty()
+			if got != tt.want {
+				t.Errorf("Filter.IsEmpty() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTextFilter_FindAllMatchIndexes(t *testing.T) {
+	tests := []struct {
+		name     string
+		filter   TextFilter
+		haystack string
+		want     [][]int
+	}{
+		{name: "EmptyValue", filter: TextFilter{}, haystack: "anything", want: nil},
+		{name: "ExactMode_Nil", filter: TextFilter{Value: "hello", Mode: FilterModeExact}, haystack: "hello", want: nil},
+		{name: "ContainsSingleMatch", filter: TextFilter{Value: "err", Mode: FilterModeContains}, haystack: "an error occurred", want: [][]int{{3, 6}}},
+		{name: "ContainsMultipleMatches", filter: TextFilter{Value: "ab", Mode: FilterModeContains}, haystack: "ab cd ab ef ab", want: [][]int{{0, 2}, {6, 8}, {12, 14}}},
+		{name: "ContainsNoMatch", filter: TextFilter{Value: "xyz", Mode: FilterModeContains}, haystack: "hello world", want: nil},
+		{name: "ContainsCaseInsensitive", filter: TextFilter{Value: "ERR", Mode: FilterModeContains}, haystack: "an error occurred", want: [][]int{{3, 6}}},
+		{name: "RegexSingleMatch", filter: TextFilter{Value: "e.*r", Mode: FilterModeRegex}, haystack: "an error occurred", want: [][]int{{3, 15}}},
+		{name: "RegexMultipleMatches", filter: TextFilter{Value: "\\d+", Mode: FilterModeRegex}, haystack: "abc 123 def 456", want: [][]int{{4, 7}, {12, 15}}},
+		{name: "RegexNoMatch", filter: TextFilter{Value: "^hello$", Mode: FilterModeRegex}, haystack: "say hello world", want: nil},
+		{name: "RegexInvalidPattern", filter: TextFilter{Value: "[invalid", Mode: FilterModeRegex}, haystack: "anything", want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.filter.FindAllMatchIndexes(tt.haystack)
+			if !matchIndexesEqual(got, tt.want) {
+				t.Errorf("TextFilter{%q, %s}.FindAllMatchIndexes(%q) = %v, want %v",
+					tt.filter.Value, tt.filter.Mode, tt.haystack, got, tt.want)
+			}
+		})
+	}
+}
+
+func matchIndexesEqual(a, b [][]int) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if len(a[i]) != len(b[i]) {
+			return false
+		}
+		for j := range a[i] {
+			if a[i][j] != b[i][j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func TestTextFilter_Compile(t *testing.T) {
 	t.Run("RegexValid", func(t *testing.T) {
 		tf := TextFilter{Value: "error.*line", Mode: FilterModeRegex}

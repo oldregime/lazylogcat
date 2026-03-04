@@ -22,10 +22,17 @@ func GetConnectedDevices() ([]model.Device, error) {
 		return nil, ErrFailedToGetDevices
 	}
 
+	return ParseDeviceList(string(output)), nil
+}
+
+// ParseDeviceList parses the output of `adb devices -l` into a slice of
+// Device structs. Lines that do not contain the keyword "device" (excluding
+// the header) are skipped. If no model: field is present the device name
+// defaults to "Undefined".
+func ParseDeviceList(output string) []model.Device {
 	devices := make([]model.Device, 0)
 
-	strOutput := string(output)
-	lines := strings.Split(strOutput, "\n")
+	lines := strings.Split(output, "\n")
 	for _, l := range lines[1:] {
 		if strings.Contains(l, "device") {
 			parts := strings.Fields(l)
@@ -45,5 +52,5 @@ func GetConnectedDevices() ([]model.Device, error) {
 		}
 	}
 
-	return devices, nil
+	return devices
 }

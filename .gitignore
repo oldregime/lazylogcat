@@ -12,3 +12,5 @@ AGENTS.md
 .opencode/plans
 
 dist/
+
+coverage.out

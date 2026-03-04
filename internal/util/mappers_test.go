@@ -135,6 +135,118 @@ func TestFilterFromConfig_RegexCompiled(t *testing.T) {
 	}
 }
 
+func boolPtr(v bool) *bool { return &v }
+
+func TestBoolOrDefault(t *testing.T) {
+	tests := []struct {
+		name string
+		ptr  *bool
+		def  bool
+		want bool
+	}{
+		{name: "NilDefaultTrue", ptr: nil, def: true, want: true},
+		{name: "NilDefaultFalse", ptr: nil, def: false, want: false},
+		{name: "TruePtr", ptr: boolPtr(true), def: false, want: true},
+		{name: "FalsePtr", ptr: boolPtr(false), def: true, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := boolOrDefault(tt.ptr, tt.def)
+			if got != tt.want {
+				t.Errorf("boolOrDefault(%v, %v) = %v, want %v", tt.ptr, tt.def, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestColorFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{name: "NilDefaultsTrue", cfg: config.Config{}, want: true},
+		{name: "True", cfg: config.Config{Display: config.Display{Color: boolPtr(true)}}, want: true},
+		{name: "False", cfg: config.Config{Display: config.Display{Color: boolPtr(false)}}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ColorFromConfig(&tt.cfg)
+			if got != tt.want {
+				t.Errorf("ColorFromConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWrapFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want bool
+	}{
+		{name: "NilDefaultsTrue", cfg: config.Config{}, want: true},
+		{name: "True", cfg: config.Config{Display: config.Display{Wrap: boolPtr(true)}}, want: true},
+		{name: "False", cfg: config.Config{Display: config.Display{Wrap: boolPtr(false)}}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := WrapFromConfig(&tt.cfg)
+			if got != tt.want {
+				t.Errorf("WrapFromConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestColumnsFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want model.Columns
+	}{
+		{
+			name: "NilColumnsHardcodedDefaults",
+			cfg:  config.Config{},
+			want: model.Columns{Date: false, Time: true, PID: false, TID: false, Level: true, Tag: true, Message: true},
+		},
+		{
+			name: "AllFieldsSet",
+			cfg: config.Config{Display: config.Display{Columns: &config.Columns{
+				Date:    boolPtr(true),
+				Time:    boolPtr(false),
+				PID:     boolPtr(true),
+				TID:     boolPtr(true),
+				Level:   boolPtr(false),
+				Tag:     boolPtr(false),
+				Message: boolPtr(false),
+			}}},
+			want: model.Columns{Date: true, Time: false, PID: true, TID: true, Level: false, Tag: false, Message: false},
+		},
+		{
+			name: "PartialMix_NilFallsToDefault",
+			cfg: config.Config{Display: config.Display{Columns: &config.Columns{
+				Date: boolPtr(true),
+				// Time nil → default true
+				PID: boolPtr(true),
+				// TID nil → default false
+				// Level nil → default true
+				Tag: boolPtr(false),
+				// Message nil → default true
+			}}},
+			want: model.Columns{Date: true, Time: true, PID: true, TID: false, Level: true, Tag: false, Message: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ColumnsFromConfig(&tt.cfg)
+			if got != tt.want {
+				t.Errorf("ColumnsFromConfig() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestModeFromConfig(t *testing.T) {
 	tests := []struct {
 		input string
