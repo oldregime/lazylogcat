@@ -3,6 +3,10 @@
 [![Build Status](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml/badge.svg?branch=trunk)](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml)
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/parfenovvs/lazylogcat)](https://github.com/parfenovvs/lazylogcat/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/parfenovvs/lazylogcat)](https://goreportcard.com/report/github.com/parfenovvs/lazylogcat)
+[![codecov](https://codecov.io/gh/parfenovvs/lazylogcat/branch/trunk/graph/badge.svg)](https://codecov.io/gh/parfenovvs/lazylogcat)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Homebrew](https://img.shields.io/badge/homebrew-available-FBB040?logo=homebrew)](https://github.com/parfenovvs/lazylogcat#installation)
 
 A TUI for viewing Android logcat logs.
 
