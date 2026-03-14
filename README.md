@@ -4,8 +4,6 @@
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/parfenovvs/lazylogcat)](https://github.com/parfenovvs/lazylogcat/releases/latest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/parfenovvs/lazylogcat)](https://goreportcard.com/report/github.com/parfenovvs/lazylogcat)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Homebrew](https://img.shields.io/badge/homebrew-available-FBB040?logo=homebrew)](https://github.com/parfenovvs/lazylogcat#installation)
 
 A TUI for viewing Android logcat logs.
 
@@ -26,48 +24,8 @@ lazylogcat provides a lightweight, focused TUI for viewing and filtering logcat 
 
 ## Installation
 
-### Option 1: Homebrew (Recommended)
-
 ```bash
 brew tap parfenovvs/lazylogcat && brew install lazylogcat
-```
-
-### Option 2: Install via go install
-
-Requires Go 1.24 or higher.
-
-```bash
-go install github.com/parfenovvs/lazylogcat@latest
-```
-
-**Important:** This installs the binary to your `$GOBIN` directory (or `$GOPATH/bin` if `GOBIN` is not set). Ensure this directory is in your `PATH`:
-
-```bash
-# Check where the binary is installed
-go env GOBIN    # If empty, defaults to $(go env GOPATH)/bin
-
-# Verify installation
-which lazylogcat
-```
-
-If `lazylogcat` is not found, add the Go bin directory to your `PATH` environment variable.
-
-### Option 3: Build from Source
-
-Requires Go 1.24 or higher.
-
-```bash
-# Clone the repository
-git clone https://github.com/parfenovvs/lazylogcat.git
-cd lazylogcat
-
-# Build the binary
-go build -o lazylogcat .
-
-# Run directly
-./lazylogcat
-
-Optional: Move the binary to a directory in your PATH
 ```
 
 ## Usage
