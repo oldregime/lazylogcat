@@ -22,6 +22,16 @@ jobs:
         with:
           go-version: "1.24"
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install JS dependencies
+        working-directory: web-ui
+        run: bun install
+
+      - name: Build frontend
+        run: go generate ./internal/web/...
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
