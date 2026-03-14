@@ -54,19 +54,19 @@ func buildShortcutMap() map[string]model.CommandData {
 }
 
 type LogcatViewModel struct {
-	parentSize        model.Size
-	viewport          viewport.Model
-	device            *model.Device
-	deviceId          string
-	filter            model.Filter
-	outputPrefs       model.OutputPrefs
-	log               *util.RingBuffer
-	reader            *util.LogcatReader
-	visualMode        bool
-	currentLine       int
-	startSelected     int
-	awaitingShortcut  bool
-	connGen           uint64 // incremented on each voluntary reconnect; used to discard stale messages
+	parentSize         model.Size
+	viewport           viewport.Model
+	device             *model.Device
+	deviceId           string
+	filter             model.Filter
+	outputPrefs        model.OutputPrefs
+	log                *util.RingBuffer
+	reader             *util.LogcatReader
+	visualMode         bool
+	currentLine        int
+	startSelected      int
+	awaitingShortcut   bool
+	connGen            uint64 // incremented on each voluntary reconnect; used to discard stale messages
 	toast              tui.ToastModel
 	showCommandDialog  bool
 	commandDialog      commandui.CommandDialogModel
@@ -468,50 +468,6 @@ func softWrapIndent(line string, prefixWidth, viewportWidth int) string {
 	return sb.String()
 }
 
-// highlightMatches applies selector-colored highlighting to substrings of line
-// that match the text filter. Non-matching portions are styled with levelColor
-// as their foreground. If the filter is empty, exact-mode, or produces no
-// matches against line, the original line is returned unstyled.
-func highlightMatches(line string, filter *model.TextFilter, levelColor lipgloss.Color) string {
-	matches := filter.FindAllMatchIndexes(line)
-	if len(matches) == 0 {
-		return ""
-	}
-
-	hlStyle := lipgloss.NewStyle().
-		Foreground(theme.ColorSelectedFG).
-		Background(theme.ColorSelectedBG)
-	var normalStyle lipgloss.Style
-	if levelColor != "" {
-		normalStyle = lipgloss.NewStyle().Foreground(levelColor)
-	}
-
-	var sb strings.Builder
-	prev := 0
-	for _, m := range matches {
-		start, end := m[0], m[1]
-		if start > prev {
-			seg := line[prev:start]
-			if levelColor != "" {
-				sb.WriteString(normalStyle.Render(seg))
-			} else {
-				sb.WriteString(seg)
-			}
-		}
-		sb.WriteString(hlStyle.Render(line[start:end]))
-		prev = end
-	}
-	if prev < len(line) {
-		seg := line[prev:]
-		if levelColor != "" {
-			sb.WriteString(normalStyle.Render(seg))
-		} else {
-			sb.WriteString(seg)
-		}
-	}
-	return sb.String()
-}
-
 func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
@@ -552,13 +508,7 @@ func (m *LogcatViewModel) Render() {
 		}
 
 		levelColor := theme.GetLogColor(logLine.Level)
-		hlColor := levelColor
-		if !m.outputPrefs.Color {
-			hlColor = ""
-		}
-		if hl := highlightMatches(content, &m.filter.Text, hlColor); hl != "" {
-			b.WriteString(hl)
-		} else if m.outputPrefs.Color && levelColor != "" {
+		if m.outputPrefs.Color && levelColor != "" {
 			b.WriteString(lipgloss.NewStyle().Foreground(levelColor).Render(content))
 		} else {
 			b.WriteString(content)
