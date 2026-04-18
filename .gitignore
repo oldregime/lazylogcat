@@ -15,3 +15,5 @@ coverage.out
 
 internal/web/static/
 web-ui/node_modules/
+
+.cursor/
