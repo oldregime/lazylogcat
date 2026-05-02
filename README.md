@@ -25,7 +25,7 @@ lazylogcat provides a lightweight, focused TUI for viewing and filtering logcat 
 ## Installation
 
 ```bash
-brew tap parfenovvs/lazylogcat && brew install lazylogcat
+brew install parfenovvs/lazylogcat/lazylogcat
 ```
 
 ## Usage
