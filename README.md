@@ -7,6 +7,8 @@
 
 A TUI for viewing Android logcat logs.
 
+[YouTube Demo](https://youtu.be/ochaEmJQDlM)
+
 ## Motivation
 
 Reading Android logcat logs shouldn't require heavy tooling:
@@ -16,7 +18,7 @@ Reading Android logcat logs shouldn't require heavy tooling:
 
 lazylogcat provides a lightweight, focused TUI for viewing and filtering logcat logs without the overhead.
 
-![demo](demo.svg)
+![demo](demo.png)
 
 ## Prerequisites
 
