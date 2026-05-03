@@ -177,7 +177,6 @@ func (m *SingleSelectModel) Rebuild(items []SingleSelectItem, currentKey string)
 // View renders the single-select dialog.
 func (m SingleSelectModel) View() string {
 	title := commonui.DialogTitleWithESC(m.title)
-	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
@@ -187,6 +186,9 @@ func (m SingleSelectModel) View() string {
 	}
 
 	search := theme.DialogSearch().Render(m.searchInput.View())
-	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
+	content := title + "\n\n" + search + "\n" + body
+	if m.footer != "" {
+		content += "\n\n" + theme.DialogHelp().Render(m.footer)
+	}
 	return commonui.DialogFrameStyle().Render(content)
 }

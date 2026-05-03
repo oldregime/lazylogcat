@@ -115,20 +115,20 @@ func (m TextInputModel) Mode() model.TextFilterMode {
 func (m TextInputModel) View() string {
 	title := commonui.DialogTitleWithESC(m.title)
 
-	var footer string
-	if m.modeEnabled {
-		footer = theme.DialogHelp().Render(m.renderModeHint())
-	} else {
-		footer = theme.DialogHelp().Render(m.footer)
-	}
-
 	var errorLine string
 	if m.errorMsg != "" {
 		errorLine = "\n" + theme.DialogError().Render(m.errorMsg)
 	}
 
 	input := theme.DialogSearch().Render(m.input.View())
-	content := title + "\n\n" + input + errorLine + "\n\n" + footer
+	content := title + "\n\n" + input + errorLine
+
+	if m.modeEnabled {
+		content += "\n\n" + theme.DialogHelp().Render(m.renderModeHint())
+	} else if m.footer != "" {
+		content += "\n\n" + theme.DialogHelp().Render(m.footer)
+	}
+
 	return commonui.DialogFrameStyle().Render(content)
 }
 

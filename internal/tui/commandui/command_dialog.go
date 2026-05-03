@@ -437,7 +437,6 @@ func (m CommandDialogModel) View() string {
 
 func (m CommandDialogModel) viewCommands() string {
 	title := commonui.DialogTitleWithESC("Commands")
-	footer := theme.DialogHelp().Render("")
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
@@ -447,6 +446,6 @@ func (m CommandDialogModel) viewCommands() string {
 	}
 
 	search := theme.DialogSearch().Render(m.searchInput.View())
-	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
+	content := title + "\n\n" + search + "\n" + body
 	return commonui.DialogFrameStyle().Render(content)
 }

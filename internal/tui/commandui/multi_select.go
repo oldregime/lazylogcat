@@ -156,7 +156,6 @@ func (m *MultiSelectModel) filterRows() {
 // View renders the multi-select dialog.
 func (m MultiSelectModel) View() string {
 	title := commonui.DialogTitleWithESC(m.title)
-	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string
 	if len(m.table.Rows()) == 0 && m.searchInput.Value() != "" {
@@ -166,6 +165,9 @@ func (m MultiSelectModel) View() string {
 	}
 
 	search := theme.DialogSearch().Render(m.searchInput.View())
-	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
+	content := title + "\n\n" + search + "\n" + body
+	if m.footer != "" {
+		content += "\n\n" + theme.DialogHelp().Render(m.footer)
+	}
 	return commonui.DialogFrameStyle().Render(content)
 }
