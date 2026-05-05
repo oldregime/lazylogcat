@@ -184,7 +184,7 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 	footerHeight := lipgloss.Height(m.footerView())
 	vp := viewport.New(
 		viewport.WithWidth(parentSize.Width),
-		viewport.WithHeight(parentSize.Height-footerHeight-headerHeight),
+		viewport.WithHeight(parentSize.Height-footerHeight-headerHeight-2),
 	)
 	m.viewport = vp
 
@@ -212,7 +212,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
 		m.viewport.SetWidth(m.parentSize.Width)
-		m.viewport.SetHeight(m.parentSize.Height - footerHeight - headerHeight)
+		m.viewport.SetHeight(m.parentSize.Height - footerHeight - headerHeight - 2)
 		needsRender = true
 
 	case commandui.CommandDialogCloseMsg:
@@ -832,7 +832,12 @@ func (m LogcatViewModel) viewportView() string {
 }
 
 func (m LogcatViewModel) renderBaseView() string {
-	return m.headerView() + m.viewportView() + m.footerView()
+	return fmt.Sprintf(
+		"%s\n%s\n%s",
+		m.headerView(),
+		m.viewportView(),
+		m.footerView(),
+	)
 }
 
 func (m LogcatViewModel) View() string {
